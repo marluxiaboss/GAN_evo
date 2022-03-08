@@ -7,9 +7,8 @@ from utils.data_loader import GenDataIter
 
 
 class SA_DPGAN_D(TransformerGenerator):
-    def __init__(self, embedding_dim, hidden_dim, vocab_size, max_seq_len, padding_idx, num_heads=4, nlayers=4, dropout=0.5, gpu=False):
-        super(SA_DPGAN_D, self).__init__(embedding_dim, hidden_dim, vocab_size, max_seq_len, padding_idx, num_heads, nlayers, dropout, gpu)
-        self.name = 'sa_dpgan_d'
+    def __init__(self, config):
+        super(SA_DPGAN_D, self).__init__(config)
 
     def getReward(self, samples):
         """

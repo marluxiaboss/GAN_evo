@@ -358,21 +358,11 @@ class SelfAttentionInstructor:
         for i, data in enumerate(data_loader):
             inp, target = data['input'], data['target'] #[batch_size, max_seq_len], [batch_size, max_seq_len]
             inp = inp.transpose(1, 0).contiguous()       # [max_seq_len, batch_size]
-            target = target.transpose(1, 0).contiguous() # [max_seq_len, batch_size]
             if cfg.CUDA:
-                inp, target = inp.cuda(), target.cuda()
+                inp, target = inp.cuda()
             #print(f"inp: {inp} \n target: {target}")
-
-            model.init_weights()
-            dummy_tgt = torch.ones_like(target)
-            print("target_correct: ")
-            print(target.shape())
-            print("input_correct: ")
-            print(inp.shape())
-            pred = model.forward(target, inp)  # [max_seq_len * batch_size, vocab_size]
-            #print(f"pred: {pred}")
-            #TODO beam_search is actually only used when sampling the model!,
-            #for the loss, you can just use the probability vector(obtain by softmax)
+            # TODO: what is lm_labels ? is it exactly the target ?
+            pred = model.forward(inp, lm_labels=target)  # [max_seq_len * batch_size, vocab_size]
             loss = criterion(pred, target.view(-1))
             self.optimize(optimizer, loss, model)
             total_loss += loss.item()
@@ -478,10 +468,10 @@ class SelfAttentionInstructor:
         """
         with torch.no_grad():
             # Prepare data for evaluation
-            eval_samples = self.gen.new_sample(cfg.samples_num, 4 * cfg.batch_size)
+            eval_samples = self.gen.sample_sequence(cfg.samples_num, 4 * cfg.batch_size)
             gen_data = GenDataIter(eval_samples)
             gen_tokens = tensor_to_tokens(eval_samples, self.idx2word_dict)
-            gen_tokens_s = tensor_to_tokens(self.gen.new_sample(200, 200), self.idx2word_dict)
+            gen_tokens_s = tensor_to_tokens(self.gen.sample_sequence(200, 200), self.idx2word_dict)
             
 
             # Reset metrics
@@ -501,10 +491,10 @@ class SelfAttentionInstructor:
 
         with torch.no_grad():
             # Prepare data for evaluation
-            eval_samples = self.gen.new_sample(cfg.samples_num, 8 * cfg.batch_size, label_i=label_i)
+            eval_samples = self.gen.sample_sequence(cfg.samples_num, 8 * cfg.batch_size, label_i=label_i)
             gen_data = GenDataIter(eval_samples)
             gen_tokens = tensor_to_tokens(eval_samples, self.idx2word_dict)
-            gen_tokens_s = tensor_to_tokens(self.gen.new_sample(200, 200, label_i=label_i), self.idx2word_dict)
+            gen_tokens_s = tensor_to_tokens(self.gen.sample_sequence(200, 200, label_i=label_i), self.idx2word_dict)
             clas_data = CatClasDataIter([eval_samples], label_i)
 
             # Reset metrics
@@ -531,7 +521,7 @@ class SelfAttentionInstructor:
         if phase != 'ADV':
             torch.save(self.gen.state_dict(), cfg.save_model_root + 'gen_{}_{:05d}.pt'.format(phase, epoch))
         save_sample_path = cfg.save_samples_root + 'samples_{}_{:05d}.txt'.format(phase, epoch)
-        samples = self.gen.new_sample(cfg.batch_size, cfg.batch_size)
+        samples = self.gen.sample_sequence(cfg.batch_size, cfg.batch_size)
         write_tokens(save_sample_path, tensor_to_tokens(samples, self.idx2word_dict))
 
     def update_temperature(self, i, N):

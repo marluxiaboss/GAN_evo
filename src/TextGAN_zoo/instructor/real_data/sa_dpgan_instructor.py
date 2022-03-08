@@ -10,17 +10,15 @@ from models.SA_DPGAN_G import SA_DPGAN_G
 from models.DGSAN_G import DGSAN_G
 
 
+
 class SADPGANInstructor(SelfAttentionInstructor):
     def __init__(self, opt):
         super(SADPGANInstructor, self).__init__(opt)
 
+        config = cfg.GPT2Config()
         # generator, discriminator
-        self.gen = SA_DPGAN_G(cfg.gen_embed_dim, cfg.gen_hidden_dim, cfg.vocab_size, cfg.max_seq_len,
-                           cfg.padding_idx, num_heads=cfg.gen_num_heads, nlayers=cfg.gen_nlayers, dropout=cfg.dropout, gpu=cfg.CUDA)
-        #self.gen = DGSAN_G(cfg.gen_embed_dim, cfg.gen_hidden_dim, cfg.vocab_size, cfg.max_seq_len,
-        #                   cfg.padding_idx, gpu=cfg.CUDA)
-        self.dis = SA_DPGAN_D(cfg.gen_embed_dim, cfg.gen_hidden_dim, cfg.vocab_size, cfg.max_seq_len,
-                           cfg.padding_idx, num_heads=cfg.dis_num_heads, nlayers=cfg.dis_nlayers, dropout=cfg.dropout, gpu=cfg.CUDA)
+        self.gen = SA_DPGAN_G(config)
+        self.dis = SA_DPGAN_D(config)
         self.init_model()
 
 
