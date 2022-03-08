@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 
 from models.generator import TransformerGenerator
+import config as cfg
 
 
 class SA_DPGAN_G(TransformerGenerator):
@@ -19,10 +20,22 @@ class SA_DPGAN_G(TransformerGenerator):
             log_prob: batch_size * seq_len  (log probabilities)
         """
         batch_size, _ = inp.size()
-        src_mask = self.generate_square_subsequent_mask(self.max_seq_len)
         inp = inp.transpose(1, 0)       # [max_seq_len, batch_size]
-        pred = self.forward(inp, src_mask)
+        dummy_tgt = torch.ones(self.max_seq_len, batch_size, dtype=torch.int)
+        if self.gpu:
+            dummy_tgt = dummy_tgt.cuda()
+
+        target = torch.zeros(inp.size()).long()
+        target[:, cfg.max_seq_len] = cfg.padding_idx
+        target[:, 0:cfg.max_seq_len - 1] = inp[:, 1:cfg.max_seq_len]
+        if self.gpu:
+            target = target.cuda()
+
+        pred = self.forward(target, inp)
+
+
         samples = torch.argmax(pred, dim=-1).view(batch_size, -1)
+        print(samples)
         log_prob = F.nll_loss(pred, samples.view(-1), reduction='none').view(batch_size, -1)
         # samples = torch.multinomial(torch.exp(log_prob), 1)
         return samples, log_prob

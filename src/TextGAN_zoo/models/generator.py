@@ -129,6 +129,14 @@ class LSTMGenerator(nn.Module):
             return h, c
 
 
+
+
+
+
+
+
+
+
 # code adapted from https://pytorch.org/tutorials/beginner/transformer_tutorial.html
 class TransformerGenerator(nn.Module):
 
@@ -147,14 +155,25 @@ class TransformerGenerator(nn.Module):
         self.padding_idx = padding_idx
         self.gpu = gpu
 
-        self.encoder = nn.Embedding(vocab_size, embedding_dim, padding_idx=padding_idx)
+        self.embedding = nn.Embedding(vocab_size, embedding_dim, padding_idx=padding_idx)
         self.pos_encoder = PositionalEncoding(embedding_dim, dropout)
+
         print(f"embed_dim: {embedding_dim}, hidden_dim: {hidden_dim}, num_heads:{nhead}")
-        encoder_layers = TransformerEncoderLayer(embedding_dim, nhead, hidden_dim, dropout)
-        self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
+        #encoder_layers = TransformerEncoderLayer(d_model=embedding_dim, nhead=nhead, dim_feedforward=hidden_dim, dropout=dropout)
+        #self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
+
+        encoder_layer = nn.TransformerEncoderLayer(d_model=embedding_dim, nhead=nhead, dim_feedforward=hidden_dim, dropout=dropout)
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=nlayers)
+
+        decoder_layer = nn.TransformerDecoderLayer(d_model=embedding_dim, nhead=nhead, dim_feedforward=hidden_dim, dropout=dropout)
+        self.transformer_decoder = nn.TransformerDecoder(decoder_layer, num_layers=nlayers)
         
-        self.decoder = nn.Linear(embedding_dim, vocab_size)
+        self.fc_out = nn.Linear(embedding_dim, vocab_size)
         self.softmax = nn.LogSoftmax(dim=-1)
+
+        self.src_mask = None
+        self.trg_mask = None
+        self.memory_mask = None
 
         self.init_weights()
 
@@ -164,37 +183,65 @@ class TransformerGenerator(nn.Module):
         if cfg.CUDA:
             mask = mask.cuda()
         return mask
+    
+    def make_len_mask(self, inp):
+        return (inp == 0).transpose(0, 1)
 
-    def forward(self, src, src_mask=None):
+    def forward(self, src, trg):
         """src: [max_seq_len, batch_size]"""
 
-        #print("1. SRC:")
-        #print(src.size())
-        src1 = self.encoder(src) * math.sqrt(self.embedding_dim) #src1: [max_seq_len, batch_size, embedding_dim]
-        #print("2. SRC after encoder(inp):")
-        #print(src1.size())
-        #if len(src1.size()) == 1:
-        #    src1 = src1.unsqueeze(1) # ???? batch_size * 1 * embedding_dim
-        #print("3. SRC after unsqueeze:")
-        #print(src1.size())
-        src2 = self.pos_encoder(src1) #src2: [max_seq_len, batch_size, embedding_dim]
-        #print("4. SRC after pos_encoder:")
-        #print(src2.size())
-        output = self.transformer_encoder(src2, src_mask) #output: [max_seq_len, batch_size, embedding_dim]
-        #output = self.transformer_encoder(src)
-        #print("1. OUT after transencod:")
-        #print(output.size())
-        output = self.decoder(output) #output: [max_seq_len, batch_size, vocab_size]
-        #print("2. OUT after decoder: ")
-        #print(output.size())
+        #print(f" Input: src: {src.size()}, trg: {trg.size()}")
+        #print(src)
+        #print(trg)
+        if self.trg_mask is None or self.trg_mask.size(0) != len(trg):
+            self.trg_mask = self.generate_square_subsequent_mask(len(trg)).to(trg.device)
+
+        src_pad_mask = self.make_len_mask(src)
+        trg_pad_mask = self.make_len_mask(trg)
+        
+        
+        
+
+        src = self.embedding(src)  * math.sqrt(self.embedding_dim) #src: [max_seq_len, batch_size, embedding_dim]
+        trg = self.embedding(trg) * math.sqrt(self.embedding_dim)  #trg: [max_seq_len, batch_size, embedding_dim]
+        #print(f" After embedding: src: {src.size()}, trg: {trg.size()}")
+        #print(src)
+        #print(trg)
+
+        src = self.pos_encoder(src) #src: [max_seq_len, batch_size, embedding_dim]
+        trg = self.pos_encoder(trg) #trg: [max_seq_len, batch_size, embedding_dim]
+        #print(f" After positional encoding: src: {src.size()}, trg: {trg.size()}")
+        #print(src)
+        #print(trg)
+
+        src = self.transformer_encoder(src, src_key_padding_mask=src_pad_mask) #output: [max_seq_len, batch_size, embedding_dim]
+
+        output = self.transformer_decoder(
+            memory = src, 
+            tgt = trg,
+            tgt_mask = self.trg_mask, 
+            memory_mask = self.memory_mask, 
+            tgt_key_padding_mask = trg_pad_mask, 
+            memory_key_padding_mask = src_pad_mask) #output: [max_seq_len, batch_size, embedding_dim]
+        #print(f" After decoder: output: {output.size()}")
+        #print(output)
+
+        output = self.fc_out(output) #output: [max_seq_len, batch_size, vocab_size]
+        #print(f" After fc_out: output: {output.size()}")
+        #print(output)
         #return output
-        output = output.contiguous().view(-1, self.vocab_size)  # [max_seq_len * batch_size, vocab_size]
-        #print("3. OUT after view:")
-        #print(output.size())
-        pred = self.softmax(output) # [max_seq_len * batch_size, vocab_size]
-        #print("PRED")
-        #print(pred.size())
-        return pred
+
+        #Flatten all the sentences one after the other
+        output = output.view(-1, self.vocab_size)  # [max_seq_len * batch_size, vocab_size]
+        #print(f" After view: output: {output.size()}")
+        #print(output)
+
+        pred = self.softmax(output) # [max_seq_len * batch_size, vocab_size] with vocab_size a distribution
+        #print(f" After softmax: pred: {pred.size()}")
+        #print(pred)
+
+        return pred  
+
 
     def sample(self, num_samples, batch_size, start_letter=cfg.start_letter):
         """
@@ -209,38 +256,191 @@ class TransformerGenerator(nn.Module):
             #inp = torch.LongTensor([start_letter] * batch_size)
             inp = torch.LongTensor([start_letter] * self.max_seq_len)
             inp = inp.unsqueeze(1).expand(self.max_seq_len, batch_size)
-
             if self.gpu:
                 inp = inp.cuda()
 
-            for i in range(self.max_seq_len):
-                out = self.forward(inp, self.generate_square_subsequent_mask(self.max_seq_len))  # [max_seq_len * batch_size, vocab_size]
-                
-                #Expand to 3 dimesnion and then drop the first one of size max_seq_len
-                pred = torch.reshape(out, (self.max_seq_len, batch_size, self.vocab_size)) # [max_seq_len, batch_size, vocab_size]
-                pred = pred[i, :, :]        # [batch_size, vocab_size]
-                
-                next_token = torch.multinomial(torch.exp(pred), 1)  # [batch_size, 1] (sampling from each row)
-                #print(f"Nexttoken: {next_token.size()}")
-                #print(f"samples: {samples.size()}")
-                samples[b * batch_size : (b + 1) * batch_size, i] = next_token.view(-1)
-                inp = next_token.view(-1).unsqueeze(0).expand(self.max_seq_len, batch_size)
-                #print(f"inp end loop: {inp.size()}")
+            dummy_tgt = torch.ones(self.max_seq_len, batch_size, dtype=torch.int)
+            if self.gpu:
+                dummy_tgt = dummy_tgt.cuda()
+            
+            target = torch.zeros(inp.size()).long()
+            target[:, cfg.max_seq_len-1] = cfg.padding_idx
+            target[:, 0:cfg.max_seq_len - 1] = inp[:, 1:cfg.max_seq_len]
+            if self.gpu:
+                target = target.cuda()
+            
+            output = self.forward(dummy_tgt, inp)  # [max_seq_len * batch_size, vocab_size]
+            
+            #print(f"Output after forward {output.size()}: {output}")
+            #print(f"input after forward: {inp}")
+               
+
+            #Done in forward pass 
+            # #Flatten all the sentences one after the other         
+            #output = output.view(-1, self.vocab_size)
+            #print(f"Output after view: {output.size()}") 
+             
+            #Sample a word for each poisiton in each sentence
+            output = torch.multinomial(torch.exp(output), 1)  # [max_seq_len * batch_size, 1] (sampling from each row
+            #print(f"Output after multinomial: {output.size()}") 
+            #Reshape to fit samples
+            output = output.squeeze().reshape(batch_size, self.max_seq_len)
+            #print(f"Output after reshape: {output.size()}")
+
+            samples[b * batch_size : (b + 1) * batch_size] = output
+
         samples = samples[:num_samples]
+        #print(samples)
+        return samples 
+
+    "Still need to be fixed "
+    def new_sample_old(self, num_samples, batch_size, start_letter=cfg.start_letter):
+        """
+        Samples the network and returns num_samples samples of length max_seq_len.
+        :return samples: num_samples * max_seq_length (a sampled sequence in each row)
+        """
+        num_batch = num_samples // batch_size + 1 if num_samples != batch_size else 1
+        samples = torch.zeros(num_batch * batch_size, self.max_seq_len).long()
+
+        # Generate sentences with multinomial sampling strategy
+        for b in range(num_batch):
+            smpl = torch.LongTensor([start_letter] * self.max_seq_len)
+            smpl = smpl.unsqueeze(1).expand(self.max_seq_len, batch_size)
+            #smpl = torch.LongTensor([start_letter] * batch_size * self.max_seq_len).view(self.max_seq_len, batch_size)
+            if self.gpu:
+                smpl = smpl.cuda()
+            random_encoder_out = torch.rand(self.max_seq_len, batch_size, self.hidden_dim)
+            if self.gpu:
+                random_encoder_out = random_encoder_out.cuda()
+
+            for i in range(self.max_seq_len-1):
+                if self.trg_mask is None or self.trg_mask.size(0) != len(smpl):
+                    self.trg_mask = self.generate_square_subsequent_mask(len(smpl))
+                    if self.gpu:
+                        self.trg_mask = self.trg_mask.cuda()
+                trg_pad_mask= self.make_len_mask(smpl)
+                #TODO: add encoder use(use forward):
+                # target should be what has been predicted so far shifted right
+
+                # what has been predicted so far shifted right
+                tgt = smpl[:][1:]
+                # We add a row of zeroes to match dimensions
+                zeros = np.zeros((len(tgt) + 1, len(tgt[0])))
+                zeros[:-1, :] = tgt.cpu().detach().numpy()
+                tgt = torch.from_numpy(zeros).to(torch.int64)
+                if self.gpu:
+                    tgt = tgt.cuda()
+                print("target_incorrect: ")
+                print(tgt.shape())
+                print("input_incorrect: ")
+                print(smpl.shape())
+                output = self.forward(tgt, smpl)
+                # Select one word predction for only one batch
+                output = output[b * batch_size : (b + 1) * batch_size][:]
+                """tgt = self.embedding(smpl)
+                tgt = self.pos_encoder(tgt)
+                output = self.transformer_decoder(
+                    tgt=tgt,
+                    memory=random_encoder_out,
+                    tgt_mask=self.trg_mask,
+                    tgt_key_padding_mask = trg_pad_mask)
+                output = self.fc_out(output)
+                output = self.softmax(output) """""
+                #print(f"output size: {output.size()}")
+                #output = output[:,-1, :] # the last timestep
+                #print(f"output size: {output.size()}")
+                #TODO: add beam_search here:
+                values, indices = output.max(dim=-1)
+                #indices = indices
+                #print(f"indices size: {indices.size()}")
+                indices = indices[i,:].view(1, -1)
+                #print(f"indices size: {indices.size()}")
+                #print(f"indices: {indices}")
+                #print(f"smpl size: {smpl.size()}")
+                #print(f"indices size: {indices.size()}")
+                smpl = torch.cat((smpl, indices),0)
+                #smpl[i] = indices
+                #print(f"smpl size: {smpl.size()}")
+                #smpl = indices
+                new_smpl = indices.view(-1,1)
+                #print(f"new_smpl size: {new_smpl.size()}")
+                samples[b * batch_size : (b + 1) * batch_size] = new_smpl
+
+
+
+            #Reshape to fit samples
+            #print(f"smpl size: {smpl.size()}")
+            #smpl = smpl.reshape(batch_size, self.max_seq_len)
+            #print(f"Output after reshape: {output.size()}")
+            #print(f"samples size: {samples.size()}")
+            #print(f"batch_size: {batch_size}")
+            #samples[b * batch_size : (b + 1) * batch_size] = smpl
+
+        samples = samples[:num_samples]
+        #print(samples)
         return samples
 
-    #Replace init_hidden, not sure it's working properly
+    def new_sample(self, num_samples, batch_size, start_letter=cfg.start_letter):
+        """
+        Samples the network and returns num_samples samples of length max_seq_len.
+        :return samples: num_samples * max_seq_length (a sampled sequence in each row)
+        """
+        num_batch = num_samples // batch_size + 1 if num_samples != batch_size else 1
+        samples = torch.zeros(num_batch * batch_size, self.max_seq_len).long()
+
+        # Generate sentences with multinomial sampling strategy
+        for b in range(num_batch):
+            # inp = torch.LongTensor([start_letter] * batch_size)
+            inp = torch.LongTensor([start_letter] * self.max_seq_len)
+            inp = inp.unsqueeze(1).expand(self.max_seq_len, batch_size)
+            if self.gpu:
+                inp = inp.cuda()
+
+            dummy_tgt = torch.ones(self.max_seq_len, batch_size, dtype=torch.int)
+            if self.gpu:
+                dummy_tgt = dummy_tgt.cuda()
+
+            target = torch.zeros(inp.size()).long()
+            target[:, cfg.max_seq_len - 1] = cfg.padding_idx
+            target[:, 0:cfg.max_seq_len - 1] = inp[:, 1:cfg.max_seq_len]
+            if self.gpu:
+                target = target.cuda()
+
+            output = self.forward(target, inp)  # [max_seq_len * batch_size, vocab_size]
+
+            # print(f"Output after forward {output.size()}: {output}")
+            # print(f"input after forward: {inp}")
+
+            # Done in forward pass
+            # #Flatten all the sentences one after the other
+            # output = output.view(-1, self.vocab_size)
+            # print(f"Output after view: {output.size()}")
+
+            # Sample a word for each poisiton in each sentence
+            output = torch.multinomial(torch.exp(output),
+                1)  # [max_seq_len * batch_size, 1] (sampling from each row
+            # print(f"Output after multinomial: {output.size()}")
+            # Reshape to fit samples
+            output = output.squeeze().reshape(batch_size, self.max_seq_len)
+            # print(f"Output after reshape: {output.size()}")
+
+            samples[b * batch_size: (b + 1) * batch_size] = output
+
+        samples = samples[:num_samples]
+        # print(samples)
+        return samples
+
+    #TODO: Replace init_hidden, is it still necessary?
     def init_weights(self):
-        initrange = 0.1
-        self.encoder.weight.data.uniform_(-initrange, initrange)
-        self.decoder.bias.data.zero_()
-        self.decoder.weight.data.uniform_(-initrange, initrange)
+      pass
 
     def init_oracle(self):
         for param in self.parameters():
             if param.requires_grad:
-                initrange = 0.1
-                torch.nn.init.uniform_(param, -initrange, initrange)
+                #TODO: should we init the transformer weights with a normal or uniform distribution?
+                torch.nn.init.normal_(param, mean=0, std=1)
+                #initrange = 0.1
+                #torch.nn.init.uniform_(param, -initrange, initrange)
 
 
 class PositionalEncoding(nn.Module):

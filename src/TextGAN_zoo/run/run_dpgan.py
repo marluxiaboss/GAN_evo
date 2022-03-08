@@ -27,20 +27,20 @@ else:
     print('Missing argument: job_id and gpu_id. Use default job_id: {}, gpu_id: {}'.format(job_id, gpu_id))
 
 # Executables
-#executable = '/home/kevinblin/anaconda3/envs/pytorch_env/bin/python'  # specify your own python interpreter path here
-executable = '/usr/bin/python3'  # specify your own python interpreter path here
+#executable = '/usr/bin/python3'  # specify your own python interpreter path here
+executable = sys.executable
 rootdir = '../'
 scriptname = 'main.py'
 
 # ===Program===
 if_test = int(False)
 run_model = 'dpgan'
-CUDA = int(False)
+CUDA = int(True)
 oracle_pretrain = int(False)
 gen_pretrain = int(False)
 dis_pretrain = int(False)
 MLE_train_epoch = 120
-ADV_train_epoch = 200
+ADV_train_epoch = 120
 tips = 'DPGAN experiments'
 
 # ===Oracle  or Real===
@@ -80,7 +80,7 @@ use_nll_oracle = int(True)
 use_nll_gen = int(True)
 use_nll_div = int(True)
 use_bleu = int(True)
-use_self_bleu = int(False)
+use_self_bleu = int(True)
 use_ppl = int(False)
 
 args = [

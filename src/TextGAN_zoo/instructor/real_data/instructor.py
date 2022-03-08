@@ -33,6 +33,8 @@ class BasicInstructor:
 
         self.clas = None
 
+        print("I'm here")
+
         # load dictionary
         self.word2idx_dict, self.idx2word_dict = load_dict(cfg.dataset)
 
@@ -266,6 +268,19 @@ class BasicInstructor:
         if cfg.CUDA:
             self.gen.temperature.data = self.gen.temperature.data.cuda()
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 class SelfAttentionInstructor:
     def __init__(self, opt):
         self.log = create_logger(__name__, silent=False, to_disk=True,
@@ -276,8 +291,10 @@ class SelfAttentionInstructor:
         self.show_config()
 
         self.clas = None
+        self.sa = True
 
         # load dictionary
+        self.log.info(f"Loading {cfg.dataset} dataset")
         self.word2idx_dict, self.idx2word_dict = load_dict(cfg.dataset)
 
         # Dataloader
@@ -339,13 +356,23 @@ class SelfAttentionInstructor:
     def train_gen_epoch(self, model, data_loader, criterion, optimizer):
         total_loss = 0
         for i, data in enumerate(data_loader):
-            inp, target = data['input'], data['target']
+            inp, target = data['input'], data['target'] #[batch_size, max_seq_len], [batch_size, max_seq_len]
+            inp = inp.transpose(1, 0).contiguous()       # [max_seq_len, batch_size]
+            target = target.transpose(1, 0).contiguous() # [max_seq_len, batch_size]
             if cfg.CUDA:
                 inp, target = inp.cuda(), target.cuda()
+            #print(f"inp: {inp} \n target: {target}")
 
             model.init_weights()
-            src_mask = model.generate_square_subsequent_mask(model.max_seq_len)
-            pred = model.forward(inp, src_mask)
+            dummy_tgt = torch.ones_like(target)
+            print("target_correct: ")
+            print(target.shape())
+            print("input_correct: ")
+            print(inp.shape())
+            pred = model.forward(target, inp)  # [max_seq_len * batch_size, vocab_size]
+            #print(f"pred: {pred}")
+            #TODO beam_search is actually only used when sampling the model!,
+            #for the loss, you can just use the probability vector(obtain by softmax)
             loss = criterion(pred, target.view(-1))
             self.optimize(optimizer, loss, model)
             total_loss += loss.item()
@@ -451,10 +478,11 @@ class SelfAttentionInstructor:
         """
         with torch.no_grad():
             # Prepare data for evaluation
-            eval_samples = self.gen.sample(cfg.samples_num, 4 * cfg.batch_size)
+            eval_samples = self.gen.new_sample(cfg.samples_num, 4 * cfg.batch_size)
             gen_data = GenDataIter(eval_samples)
             gen_tokens = tensor_to_tokens(eval_samples, self.idx2word_dict)
-            gen_tokens_s = tensor_to_tokens(self.gen.sample(200, 200), self.idx2word_dict)
+            gen_tokens_s = tensor_to_tokens(self.gen.new_sample(200, 200), self.idx2word_dict)
+            
 
             # Reset metrics
             self.bleu.reset(test_text=gen_tokens, real_text=self.test_data.tokens)
@@ -473,10 +501,10 @@ class SelfAttentionInstructor:
 
         with torch.no_grad():
             # Prepare data for evaluation
-            eval_samples = self.gen.sample(cfg.samples_num, 8 * cfg.batch_size, label_i=label_i)
+            eval_samples = self.gen.new_sample(cfg.samples_num, 8 * cfg.batch_size, label_i=label_i)
             gen_data = GenDataIter(eval_samples)
             gen_tokens = tensor_to_tokens(eval_samples, self.idx2word_dict)
-            gen_tokens_s = tensor_to_tokens(self.gen.sample(200, 200, label_i=label_i), self.idx2word_dict)
+            gen_tokens_s = tensor_to_tokens(self.gen.new_sample(200, 200, label_i=label_i), self.idx2word_dict)
             clas_data = CatClasDataIter([eval_samples], label_i)
 
             # Reset metrics
@@ -503,7 +531,7 @@ class SelfAttentionInstructor:
         if phase != 'ADV':
             torch.save(self.gen.state_dict(), cfg.save_model_root + 'gen_{}_{:05d}.pt'.format(phase, epoch))
         save_sample_path = cfg.save_samples_root + 'samples_{}_{:05d}.txt'.format(phase, epoch)
-        samples = self.gen.sample(cfg.batch_size, cfg.batch_size)
+        samples = self.gen.new_sample(cfg.batch_size, cfg.batch_size)
         write_tokens(save_sample_path, tensor_to_tokens(samples, self.idx2word_dict))
 
     def update_temperature(self, i, N):

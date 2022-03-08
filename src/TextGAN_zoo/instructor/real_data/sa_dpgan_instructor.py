@@ -3,8 +3,11 @@ import torch.optim as optim
 
 import config as cfg
 from instructor.real_data.instructor import SelfAttentionInstructor
+from instructor.real_data.instructor import BasicInstructor
 from models.SA_DPGAN_D import SA_DPGAN_D
 from models.SA_DPGAN_G import SA_DPGAN_G
+
+from models.DGSAN_G import DGSAN_G
 
 
 class SADPGANInstructor(SelfAttentionInstructor):
@@ -14,9 +17,12 @@ class SADPGANInstructor(SelfAttentionInstructor):
         # generator, discriminator
         self.gen = SA_DPGAN_G(cfg.gen_embed_dim, cfg.gen_hidden_dim, cfg.vocab_size, cfg.max_seq_len,
                            cfg.padding_idx, num_heads=cfg.gen_num_heads, nlayers=cfg.gen_nlayers, dropout=cfg.dropout, gpu=cfg.CUDA)
+        #self.gen = DGSAN_G(cfg.gen_embed_dim, cfg.gen_hidden_dim, cfg.vocab_size, cfg.max_seq_len,
+        #                   cfg.padding_idx, gpu=cfg.CUDA)
         self.dis = SA_DPGAN_D(cfg.gen_embed_dim, cfg.gen_hidden_dim, cfg.vocab_size, cfg.max_seq_len,
                            cfg.padding_idx, num_heads=cfg.dis_num_heads, nlayers=cfg.dis_nlayers, dropout=cfg.dropout, gpu=cfg.CUDA)
         self.init_model()
+
 
         # Optimizer
         self.gen_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
@@ -77,7 +83,7 @@ class SADPGANInstructor(SelfAttentionInstructor):
                 # ===Test===
                 if epoch % cfg.pre_log_step == 0 or epoch == epochs - 1:
                     self.log.info(
-                        '[MLE-GEN] epoch %d : pre_loss = %.4f, %s' % (epoch, pre_loss, self.cal_metrics(fmt_str=True)))
+                        '[MLE-GEN] epoch %d : Epoch = %d, pre_loss = %.4f, %s' % (epoch, epoch, pre_loss, self.cal_metrics(fmt_str=True)))
                     if cfg.if_save and not cfg.if_test:
                         self._save('MLE', epoch)
             else:
@@ -103,6 +109,8 @@ class SADPGANInstructor(SelfAttentionInstructor):
 
             gen_sample, gen_sample_log_prob = self.gen.sample_teacher_forcing(inp)
             word_reward, sentence_reward = self.dis.getReward(gen_sample)
+            #print(f"word reward: {word_reward}")
+            #print(f"sentence_reward: {sentence_reward}")
             sentence_reward = sentence_reward.repeat(1, cfg.max_seq_len)
             reward_matrix = sentence_reward * word_reward * dis_count_matrix
             for i in range(cfg.max_seq_len):
@@ -126,7 +134,7 @@ class SADPGANInstructor(SelfAttentionInstructor):
         for step in range(d_step):
             # prepare loader for training
             pos_samples = self.train_data.target
-            neg_samples = self.gen.sample(pos_samples.size(0), 4 * cfg.batch_size)
+            neg_samples = self.gen.new_sample(pos_samples.size(0), 4 * cfg.batch_size)
 
             pos_reward, neg_reward = 0, 0
             for epoch in range(d_epoch):

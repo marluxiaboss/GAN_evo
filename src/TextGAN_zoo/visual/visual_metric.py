@@ -9,6 +9,7 @@
 
 import matplotlib.pyplot as plt
 import numpy as np
+import sys
 
 color_list = ['#2980b9', '#e74c3c', '#1abc9c', '#9b59b6']
 
@@ -20,7 +21,8 @@ def plt_x_y_data(x, y, title, c_id):
 def get_log_data(filename):
     with open(filename, 'r') as fin:
         all_lines = fin.read().strip().split('\n')
-        data_dict = {'Epoch': [],'NLL_oracle': [], 'NLL_gen': [], 'NLL_div': []}
+        #data_dict = {'Epoch': [],'NLL_oracle': [], 'NLL_gen': [], 'NLL_div': []}
+        data_dict = {'Epoch': [], 'pre_loss':[], 'BLEU-[2, 3, 4, 5]':[], 'NLL_gen': [], 'NLL_div': [], 'Self-BLEU-[2, 3, 4]':[], '[PPL-F, PPL-R]':[]}
 
         for line in all_lines:
             items = line.split()
@@ -35,9 +37,14 @@ def get_log_data(filename):
 
 
 if __name__ == '__main__':
+    metric = sys.argv[1]
+    fig_name = sys.argv[2]
     log_file_root = '../log/'
     # Custom your log files in lists, no more than len(color_list)
-    log_file_list = ['dpgan_log1', 'sa_dpgan_log1']
+    dpgan_log_file = sys.argv[3]
+    sa_dpgan_log_file = sys.argv[4]
+    log_file_list = [dpgan_log_file, sa_dpgan_log_file]
+    #log_file_list = ['dpgan_imagecoco', 'sa_dpgan_imagecoco']
     legend_text = ['DPGAN', 'SADPGAN']
 
     color_id = 0
@@ -53,15 +60,16 @@ if __name__ == '__main__':
 
         # save log file
         all_data = get_log_data(log_file)
+        print(all_data)
         idxs = np.argsort(-np.array(all_data['Epoch']))
-        plt_x_y_data(np.array(all_data['Epoch'])[idxs][:length], np.array(all_data['NLL_div'])[idxs][:length],
+        plt_x_y_data(np.array(all_data['Epoch'])[idxs][:length], np.array(all_data[metric])[idxs][:length],
                      legend_text[idx], color_id)
         color_id += 1
 
     plt.legend()
     # plt.tight_layout()
     plt.xlabel(r'${\rm Epoch}$')
-    plt.ylabel(r'${\rm NLL_{\rm div}}$')
+    plt.ylabel(r'${\rm NLL_{gen}}$')
     if if_save:
-        plt.savefig('../savefig/synthetic_oracle_div.png')
+        plt.savefig('../savefig/'+ fig_name + 'G_MLE_NLL_gen.png')
     plt.show()

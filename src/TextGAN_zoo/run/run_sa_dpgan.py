@@ -15,13 +15,13 @@ elif len(sys.argv) > 1:
     gpu_id = 0
     print('job_id: {}, missing gpu_id (use default {})'.format(job_id, gpu_id))
 else:
-    job_id = 0
+    job_id = 1
     gpu_id = 2
     print('Missing argument: job_id and gpu_id. Use default job_id: {}, gpu_id: {}'.format(job_id, gpu_id))
 
 # Executables
-#executable = '/home/kevinblin/anaconda3/envs/pytorch_env/bin/python'  # specify your own python interpreter path here
-executable = '/usr/bin/python3'  # specify your own python interpreter path here
+#executable = '/usr/bin/python3'  # specify your own python interpreter path here
+executable = sys.executable
 rootdir = '../'
 scriptname = 'main.py'
 
@@ -29,13 +29,13 @@ scriptname = 'main.py'
 if_test = int(False)
 run_model = 'sa_dpgan'
 sa = int(True)
-CUDA = int(True)
+CUDA = int(False)
 oracle_pretrain = int(False)
 gen_pretrain = int(False)
 dis_pretrain = int(False)
 MLE_train_epoch = 120
-ADV_train_epoch = 200
-tips = 'DPGAN experiments'
+ADV_train_epoch = 120
+tips = 'SA_DPGAN experiments'
 
 # ===Oracle  or Real===
 if_real_data = [int(False), int(True), int(True)]
@@ -47,7 +47,7 @@ data_shuffle = int(False)
 model_type = 'pineapple'
 gen_init = 'normal'
 dis_init = 'uniform'
-samples_num = 10000
+samples_num = 1000
 batch_size = 64
 max_seq_len = 20
 gen_lr = 0.01
@@ -59,9 +59,9 @@ adv_log_step = 1
 ADV_g_step = 1
 rollout_num = 16
 gen_embed_dim = 32
-gen_hidden_dim = 40
+gen_hidden_dim = 32
 gen_num_heads = 4
-gen_nlayers = 4
+gen_nlayers = 2
 
 # ===Discriminator===
 d_step = 5
@@ -71,14 +71,14 @@ ADV_d_epoch = 2
 dis_embed_dim = 64
 dis_hidden_dim = 64
 dis_num_heads = 4
-dis_nlayers = 4
+dis_nlayers = 2
 
 # ===Metrics===
 use_nll_oracle = int(True)
 use_nll_gen = int(True)
 use_nll_div = int(True)
 use_bleu = int(True)
-use_self_bleu = int(False)
+use_self_bleu = int(True)
 use_ppl = int(False)
 
 args = [

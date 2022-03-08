@@ -26,7 +26,7 @@ class NLL(Metrics):
         self.gpu = gpu
         self.criterion = nn.NLLLoss()
 
-    def get_score(self, sa=False):
+    def get_score(self, sa = False):
         """note that NLL score need the updated model and data loader each time, use reset() before get_score()"""
         if not self.if_use:
             return 0
@@ -38,7 +38,7 @@ class NLL(Metrics):
             return self.cal_nll_with_label(self.model, self.data_loader, self.label_i,
                                            self.criterion, self.gpu)
         else:
-            return self.cal_nll(self.model, self.data_loader, self.criterion, self.gpu, sa=sa)
+            return self.cal_nll(self.model, self.data_loader, self.criterion, self.gpu, sa = sa)
 
     def reset(self, model=None, data_loader=None, label_i=None, leak_dis=None):
         self.model = model
@@ -47,7 +47,7 @@ class NLL(Metrics):
         self.leak_dis = leak_dis
 
     @staticmethod
-    def cal_nll(model, data_loader, criterion, gpu=cfg.CUDA, sa=False):
+    def cal_nll(model, data_loader, criterion, gpu=cfg.CUDA, sa = False):
         """NLL score for general text generation model."""
         total_loss = 0
         with torch.no_grad():
@@ -55,7 +55,7 @@ class NLL(Metrics):
                 inp, target = data['input'], data['target'] # [batch_size, max_seq_len], [batch_size, max_seq_len]
                 if gpu:
                     inp, target = inp.cuda(), target.cuda()
-                if not sa:
+                if not cfg.sa:
                     hidden = model.init_hidden(data_loader.batch_size)
                     pred = model.forward(inp, hidden)
                 else:
@@ -63,8 +63,11 @@ class NLL(Metrics):
                     inp = inp.transpose(1, 0)       # [max_seq_len, batch_size]
                     target = target.transpose(1, 0) # [max_seq_len, batch_size]
                     model.init_weights()
-                    src_mask = model.generate_square_subsequent_mask(model.max_seq_len)
-                    pred = model.forward(inp, src_mask)  # [max_seq_len * batch_size, vocab_size]
+
+                    dummy_tgt = torch.ones_like(target)
+
+                    pred = model.forward(target, inp)  # [max_seq_len * batch_size, vocab_size]
+                    #print(f"pred: {pred.size()}")
                 target = target.contiguous().view(-1) # [max_seq_len * batch_size]
                 loss = criterion(pred, target)
                 total_loss += loss.item()

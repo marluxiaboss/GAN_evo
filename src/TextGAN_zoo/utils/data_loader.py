@@ -75,6 +75,9 @@ class GenDataIter:
         inp[:, 0] = cfg.start_letter
         inp[:, 1:] = target[:, :cfg.max_seq_len - 1]
 
+        #print(f"dataloader inp: {inp[0][:]}")
+        #print(f"dataloader target: {target[0][:]}")
+
         if gpu:
             return inp.cuda(), target.cuda()
         return inp, target
