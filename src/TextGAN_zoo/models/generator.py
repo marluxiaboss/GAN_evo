@@ -7,11 +7,11 @@
 # @Description  :
 # Copyrights (C) 2018. All Rights Reserved.
 import math
-import numpy as np
+
 import torch
 import torch.nn as nn
-import torch.functional as F
-from torch.nn import TransformerEncoder, TransformerEncoderLayer
+import torch.nn.functional as F
+from tqdm import trange
 
 import config as cfg
 from utils.helpers import truncated_normal_
@@ -46,28 +46,15 @@ class LSTMGenerator(nn.Module):
         :param hidden: (h, c)
         :param need_hidden: if return hidden, use for sampling
         """
-        #print("INP:")
-        #print(inp.size())
         emb = self.embeddings(inp)  # batch_size * len * embedding_dim
-        #print("EMB:")
-        #print(emb.size())
         if len(inp.size()) == 1:
             emb = emb.unsqueeze(1)  # batch_size * 1 * embedding_dim
-        #print("EMB after unsqueeze:")
-        #print(emb.size())
+
         out, hidden = self.lstm(emb, hidden)  # out: batch_size * seq_len * hidden_dim
-        #print("OUT after LSTM:")
-        #print(out.size())
         out = out.contiguous().view(-1, self.hidden_dim)  # out: (batch_size * len) * hidden_dim
-        #print("OUT after view:")
-        #print(out.size())
         out = self.lstm2out(out)  # (batch_size * seq_len) * vocab_size
-        #print("OUT after lstm2out:")
-        #print(out.size())
         # out = self.temperature * out  # temperature
         pred = self.softmax(out)
-        #print("PRED:")
-        #print(pred.size())
 
         if need_hidden:
             return pred, hidden
@@ -86,19 +73,14 @@ class LSTMGenerator(nn.Module):
         for b in range(num_batch):
             hidden = self.init_hidden(batch_size)
             inp = torch.LongTensor([start_letter] * batch_size)
-            #print(f"inp: {inp.size()}")
             if self.gpu:
                 inp = inp.cuda()
 
             for i in range(self.max_seq_len):
                 out, hidden = self.forward(inp, hidden, need_hidden=True)  # out: batch_size * vocab_size
-                #print(f"out: {out.size()}")
                 next_token = torch.multinomial(torch.exp(out), 1)  # batch_size * 1 (sampling from each row)
-                #print(f"nexttoken: {next_token.size()}")
                 samples[b * batch_size:(b + 1) * batch_size, i] = next_token.view(-1)
-                #print(f"samples: {samples.size()}")
                 inp = next_token.view(-1)
-                #print(f"inp: {inp.size()}")
         samples = samples[:num_samples]
 
         return samples
@@ -129,337 +111,247 @@ class LSTMGenerator(nn.Module):
             return h, c
 
 
+'''
+    code by TaeHwan Jung(@graykode)
+    Original Paper and repository here : https://github.com/openai/gpt-2
+    GPT2 Pytorch Model : https://github.com/huggingface/pytorch-pretrained-BERT
+'''
+
+def gelu(x):
+    return 0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
 
 
-
-
-
-
-
-
-# code adapted from https://pytorch.org/tutorials/beginner/transformer_tutorial.html
-class TransformerGenerator(nn.Module):
-
-    def __init__(self, embedding_dim, hidden_dim, vocab_size, max_seq_len, padding_idx, nhead=2, nlayers=2, dropout=0.5, gpu=False):
-        super(TransformerGenerator, self).__init__()
-        self.name = 'pineapple'
-        self.model_type = 'TransformerGenerator'
-        # Compared to pytorch transformer_tutorial: ntoken = vocab_size, ninp= embedding_dim,  nhid=hidden_dim, bptt = max_seq_len
-
-        self.embedding_dim = embedding_dim  # embedding dimension
-        self.hidden_dim = hidden_dim        # the dimension of the feedforward network model in nn.TransformerEncoder
-        self.nlayers = nlayers              # the number of nn.TransformerEncoderLayer in nn.TransformerEncoder
-        self.nhead = nhead                  # the number of heads in the multiheadattention models
-        self.max_seq_len = max_seq_len      #
-        self.vocab_size = vocab_size
-        self.padding_idx = padding_idx
-        self.gpu = gpu
-
-        self.embedding = nn.Embedding(vocab_size, embedding_dim, padding_idx=padding_idx)
-        self.pos_encoder = PositionalEncoding(embedding_dim, dropout)
-
-        print(f"embed_dim: {embedding_dim}, hidden_dim: {hidden_dim}, num_heads:{nhead}")
-        #encoder_layers = TransformerEncoderLayer(d_model=embedding_dim, nhead=nhead, dim_feedforward=hidden_dim, dropout=dropout)
-        #self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
-
-        encoder_layer = nn.TransformerEncoderLayer(d_model=embedding_dim, nhead=nhead, dim_feedforward=hidden_dim, dropout=dropout)
-        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=nlayers)
-
-        decoder_layer = nn.TransformerDecoderLayer(d_model=embedding_dim, nhead=nhead, dim_feedforward=hidden_dim, dropout=dropout)
-        self.transformer_decoder = nn.TransformerDecoder(decoder_layer, num_layers=nlayers)
-        
-        self.fc_out = nn.Linear(embedding_dim, vocab_size)
-        self.softmax = nn.LogSoftmax(dim=-1)
-
-        self.src_mask = None
-        self.trg_mask = None
-        self.memory_mask = None
-
-        self.init_weights()
-
-    def generate_square_subsequent_mask(self, sz):
-        mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
-        mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
-        if cfg.CUDA:
-            mask = mask.cuda()
-        return mask
-    
-    def make_len_mask(self, inp):
-        return (inp == 0).transpose(0, 1)
-
-    def forward(self, src, trg):
-        """src: [max_seq_len, batch_size]"""
-
-        #print(f" Input: src: {src.size()}, trg: {trg.size()}")
-        #print(src)
-        #print(trg)
-        if self.trg_mask is None or self.trg_mask.size(0) != len(trg):
-            self.trg_mask = self.generate_square_subsequent_mask(len(trg)).to(trg.device)
-
-        src_pad_mask = self.make_len_mask(src)
-        trg_pad_mask = self.make_len_mask(trg)
-        
-        
-        
-
-        src = self.embedding(src)  * math.sqrt(self.embedding_dim) #src: [max_seq_len, batch_size, embedding_dim]
-        trg = self.embedding(trg) * math.sqrt(self.embedding_dim)  #trg: [max_seq_len, batch_size, embedding_dim]
-        #print(f" After embedding: src: {src.size()}, trg: {trg.size()}")
-        #print(src)
-        #print(trg)
-
-        src = self.pos_encoder(src) #src: [max_seq_len, batch_size, embedding_dim]
-        trg = self.pos_encoder(trg) #trg: [max_seq_len, batch_size, embedding_dim]
-        #print(f" After positional encoding: src: {src.size()}, trg: {trg.size()}")
-        #print(src)
-        #print(trg)
-
-        src = self.transformer_encoder(src, src_key_padding_mask=src_pad_mask) #output: [max_seq_len, batch_size, embedding_dim]
-
-        output = self.transformer_decoder(
-            memory = src, 
-            tgt = trg,
-            tgt_mask = self.trg_mask, 
-            memory_mask = self.memory_mask, 
-            tgt_key_padding_mask = trg_pad_mask, 
-            memory_key_padding_mask = src_pad_mask) #output: [max_seq_len, batch_size, embedding_dim]
-        #print(f" After decoder: output: {output.size()}")
-        #print(output)
-
-        output = self.fc_out(output) #output: [max_seq_len, batch_size, vocab_size]
-        #print(f" After fc_out: output: {output.size()}")
-        #print(output)
-        #return output
-
-        #Flatten all the sentences one after the other
-        output = output.view(-1, self.vocab_size)  # [max_seq_len * batch_size, vocab_size]
-        #print(f" After view: output: {output.size()}")
-        #print(output)
-
-        pred = self.softmax(output) # [max_seq_len * batch_size, vocab_size] with vocab_size a distribution
-        #print(f" After softmax: pred: {pred.size()}")
-        #print(pred)
-
-        return pred  
-
-
-    def sample(self, num_samples, batch_size, start_letter=cfg.start_letter):
+class LayerNorm(nn.Module):
+    def __init__(self, hidden_size, eps=1e-12):
+        """Construct a layernorm module in the TF style (epsilon inside the square root).
         """
-        Samples the network and returns num_samples samples of length max_seq_len.
-        :return samples: num_samples * max_seq_length (a sampled sequence in each row)
-        """
-        num_batch = num_samples // batch_size + 1 if num_samples != batch_size else 1
-        samples = torch.zeros(num_batch * batch_size, self.max_seq_len).long()
-
-        # Generate sentences with multinomial sampling strategy
-        for b in range(num_batch):
-            #inp = torch.LongTensor([start_letter] * batch_size)
-            inp = torch.LongTensor([start_letter] * self.max_seq_len)
-            inp = inp.unsqueeze(1).expand(self.max_seq_len, batch_size)
-            if self.gpu:
-                inp = inp.cuda()
-
-            dummy_tgt = torch.ones(self.max_seq_len, batch_size, dtype=torch.int)
-            if self.gpu:
-                dummy_tgt = dummy_tgt.cuda()
-            
-            target = torch.zeros(inp.size()).long()
-            target[:, cfg.max_seq_len-1] = cfg.padding_idx
-            target[:, 0:cfg.max_seq_len - 1] = inp[:, 1:cfg.max_seq_len]
-            if self.gpu:
-                target = target.cuda()
-            
-            output = self.forward(dummy_tgt, inp)  # [max_seq_len * batch_size, vocab_size]
-            
-            #print(f"Output after forward {output.size()}: {output}")
-            #print(f"input after forward: {inp}")
-               
-
-            #Done in forward pass 
-            # #Flatten all the sentences one after the other         
-            #output = output.view(-1, self.vocab_size)
-            #print(f"Output after view: {output.size()}") 
-             
-            #Sample a word for each poisiton in each sentence
-            output = torch.multinomial(torch.exp(output), 1)  # [max_seq_len * batch_size, 1] (sampling from each row
-            #print(f"Output after multinomial: {output.size()}") 
-            #Reshape to fit samples
-            output = output.squeeze().reshape(batch_size, self.max_seq_len)
-            #print(f"Output after reshape: {output.size()}")
-
-            samples[b * batch_size : (b + 1) * batch_size] = output
-
-        samples = samples[:num_samples]
-        #print(samples)
-        return samples 
-
-    "Still need to be fixed "
-    def new_sample_old(self, num_samples, batch_size, start_letter=cfg.start_letter):
-        """
-        Samples the network and returns num_samples samples of length max_seq_len.
-        :return samples: num_samples * max_seq_length (a sampled sequence in each row)
-        """
-        num_batch = num_samples // batch_size + 1 if num_samples != batch_size else 1
-        samples = torch.zeros(num_batch * batch_size, self.max_seq_len).long()
-
-        # Generate sentences with multinomial sampling strategy
-        for b in range(num_batch):
-            smpl = torch.LongTensor([start_letter] * self.max_seq_len)
-            smpl = smpl.unsqueeze(1).expand(self.max_seq_len, batch_size)
-            #smpl = torch.LongTensor([start_letter] * batch_size * self.max_seq_len).view(self.max_seq_len, batch_size)
-            if self.gpu:
-                smpl = smpl.cuda()
-            random_encoder_out = torch.rand(self.max_seq_len, batch_size, self.hidden_dim)
-            if self.gpu:
-                random_encoder_out = random_encoder_out.cuda()
-
-            for i in range(self.max_seq_len-1):
-                if self.trg_mask is None or self.trg_mask.size(0) != len(smpl):
-                    self.trg_mask = self.generate_square_subsequent_mask(len(smpl))
-                    if self.gpu:
-                        self.trg_mask = self.trg_mask.cuda()
-                trg_pad_mask= self.make_len_mask(smpl)
-                #TODO: add encoder use(use forward):
-                # target should be what has been predicted so far shifted right
-
-                # what has been predicted so far shifted right
-                tgt = smpl[:][1:]
-                # We add a row of zeroes to match dimensions
-                zeros = np.zeros((len(tgt) + 1, len(tgt[0])))
-                zeros[:-1, :] = tgt.cpu().detach().numpy()
-                tgt = torch.from_numpy(zeros).to(torch.int64)
-                if self.gpu:
-                    tgt = tgt.cuda()
-                print("target_incorrect: ")
-                print(tgt.shape())
-                print("input_incorrect: ")
-                print(smpl.shape())
-                output = self.forward(tgt, smpl)
-                # Select one word predction for only one batch
-                output = output[b * batch_size : (b + 1) * batch_size][:]
-                """tgt = self.embedding(smpl)
-                tgt = self.pos_encoder(tgt)
-                output = self.transformer_decoder(
-                    tgt=tgt,
-                    memory=random_encoder_out,
-                    tgt_mask=self.trg_mask,
-                    tgt_key_padding_mask = trg_pad_mask)
-                output = self.fc_out(output)
-                output = self.softmax(output) """""
-                #print(f"output size: {output.size()}")
-                #output = output[:,-1, :] # the last timestep
-                #print(f"output size: {output.size()}")
-                #TODO: add beam_search here:
-                values, indices = output.max(dim=-1)
-                #indices = indices
-                #print(f"indices size: {indices.size()}")
-                indices = indices[i,:].view(1, -1)
-                #print(f"indices size: {indices.size()}")
-                #print(f"indices: {indices}")
-                #print(f"smpl size: {smpl.size()}")
-                #print(f"indices size: {indices.size()}")
-                smpl = torch.cat((smpl, indices),0)
-                #smpl[i] = indices
-                #print(f"smpl size: {smpl.size()}")
-                #smpl = indices
-                new_smpl = indices.view(-1,1)
-                #print(f"new_smpl size: {new_smpl.size()}")
-                samples[b * batch_size : (b + 1) * batch_size] = new_smpl
-
-
-
-            #Reshape to fit samples
-            #print(f"smpl size: {smpl.size()}")
-            #smpl = smpl.reshape(batch_size, self.max_seq_len)
-            #print(f"Output after reshape: {output.size()}")
-            #print(f"samples size: {samples.size()}")
-            #print(f"batch_size: {batch_size}")
-            #samples[b * batch_size : (b + 1) * batch_size] = smpl
-
-        samples = samples[:num_samples]
-        #print(samples)
-        return samples
-
-    def new_sample(self, num_samples, batch_size, start_letter=cfg.start_letter):
-        """
-        Samples the network and returns num_samples samples of length max_seq_len.
-        :return samples: num_samples * max_seq_length (a sampled sequence in each row)
-        """
-        num_batch = num_samples // batch_size + 1 if num_samples != batch_size else 1
-        samples = torch.zeros(num_batch * batch_size, self.max_seq_len).long()
-
-        # Generate sentences with multinomial sampling strategy
-        for b in range(num_batch):
-            # inp = torch.LongTensor([start_letter] * batch_size)
-            inp = torch.LongTensor([start_letter] * self.max_seq_len)
-            inp = inp.unsqueeze(1).expand(self.max_seq_len, batch_size)
-            if self.gpu:
-                inp = inp.cuda()
-
-            dummy_tgt = torch.ones(self.max_seq_len, batch_size, dtype=torch.int)
-            if self.gpu:
-                dummy_tgt = dummy_tgt.cuda()
-
-            target = torch.zeros(inp.size()).long()
-            target[:, cfg.max_seq_len - 1] = cfg.padding_idx
-            target[:, 0:cfg.max_seq_len - 1] = inp[:, 1:cfg.max_seq_len]
-            if self.gpu:
-                target = target.cuda()
-
-            output = self.forward(target, inp)  # [max_seq_len * batch_size, vocab_size]
-
-            # print(f"Output after forward {output.size()}: {output}")
-            # print(f"input after forward: {inp}")
-
-            # Done in forward pass
-            # #Flatten all the sentences one after the other
-            # output = output.view(-1, self.vocab_size)
-            # print(f"Output after view: {output.size()}")
-
-            # Sample a word for each poisiton in each sentence
-            output = torch.multinomial(torch.exp(output),
-                1)  # [max_seq_len * batch_size, 1] (sampling from each row
-            # print(f"Output after multinomial: {output.size()}")
-            # Reshape to fit samples
-            output = output.squeeze().reshape(batch_size, self.max_seq_len)
-            # print(f"Output after reshape: {output.size()}")
-
-            samples[b * batch_size: (b + 1) * batch_size] = output
-
-        samples = samples[:num_samples]
-        # print(samples)
-        return samples
-
-    #TODO: Replace init_hidden, is it still necessary?
-    def init_weights(self):
-      pass
-
-    def init_oracle(self):
-        for param in self.parameters():
-            if param.requires_grad:
-                #TODO: should we init the transformer weights with a normal or uniform distribution?
-                torch.nn.init.normal_(param, mean=0, std=1)
-                #initrange = 0.1
-                #torch.nn.init.uniform_(param, -initrange, initrange)
-
-
-class PositionalEncoding(nn.Module):
-    "Implement the PE function."
-    def __init__(self, d_model, dropout=0.1, max_len=5000):
-        super(PositionalEncoding, self).__init__()
-        self.dropout = nn.Dropout(p=dropout)
-
-        # Compute the positional encodings once in log space.
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0).transpose(0, 1)
-        #pe = pe.unsqueeze(0)
-        self.register_buffer('pe', pe)
+        super(LayerNorm, self).__init__()
+        self.weight = nn.Parameter(torch.ones(hidden_size))
+        self.bias = nn.Parameter(torch.zeros(hidden_size))
+        self.variance_epsilon = eps
 
     def forward(self, x):
-        x = x + self.pe[:x.size(0), :]
-        #x = x + Variable(self.pe[:, :x.size(1)], requires_grad=False)
-        return self.dropout(x)
+        u = x.mean(-1, keepdim=True)
+        s = (x - u).pow(2).mean(-1, keepdim=True)
+        x = (x - u) / torch.sqrt(s + self.variance_epsilon)
+        return self.weight * x + self.bias
+
+
+class Conv1D(nn.Module):
+    def __init__(self, nf, nx):
+        super(Conv1D, self).__init__()
+        self.nf = nf
+        w = torch.empty(nx, nf)
+        nn.init.normal_(w, std=0.02)
+        self.weight = Parameter(w)
+        self.bias = Parameter(torch.zeros(nf))
+
+    def forward(self, x):
+        size_out = x.size()[:-1] + (self.nf,)
+        x = torch.addmm(self.bias, x.view(-1, x.size(-1)), self.weight)
+        x = x.view(*size_out)
+        return x
+
+
+class Attention(nn.Module):
+    def __init__(self, nx, n_ctx, config, scale=False):
+        super(Attention, self).__init__()
+        n_state = nx  # in Attention: n_state=768 (nx=n_embd)
+        # [switch nx => n_state from Block to Attention to keep identical to TF implem]
+        assert n_state % config.n_head == 0
+        self.register_buffer("bias", torch.tril(torch.ones(n_ctx, n_ctx)).view(1, 1, n_ctx, n_ctx))
+        self.n_head = config.n_head
+        self.split_size = n_state
+        self.scale = scale
+        self.c_attn = Conv1D(n_state * 3, nx)
+        self.c_proj = Conv1D(n_state, nx)
+
+    def _attn(self, q, k, v):
+        w = torch.matmul(q, k)
+        if self.scale:
+            w = w / math.sqrt(v.size(-1))
+        nd, ns = w.size(-2), w.size(-1)
+        b = self.bias[:, :, ns - nd:ns, :ns]
+        w = w * b - 1e10 * (1 - b)
+        w = nn.Softmax(dim=-1)(w)
+        return torch.matmul(w, v)
+
+    def merge_heads(self, x):
+        x = x.permute(0, 2, 1, 3).contiguous()
+        new_x_shape = x.size()[:-2] + (x.size(-2) * x.size(-1),)
+        return x.view(*new_x_shape)  # in Tensorflow implem: fct merge_states
+
+    def split_heads(self, x, k=False):
+        new_x_shape = x.size()[:-1] + (self.n_head, x.size(-1) // self.n_head)
+        x = x.view(*new_x_shape)  # in Tensorflow implem: fct split_states
+        if k:
+            return x.permute(0, 2, 3, 1)  # (batch, head, head_features, seq_length)
+        else:
+            return x.permute(0, 2, 1, 3)  # (batch, head, seq_length, head_features)
+
+    def forward(self, x, layer_past=None):
+        x = self.c_attn(x)
+        query, key, value = x.split(self.split_size, dim=2)
+        query = self.split_heads(query)
+        key = self.split_heads(key, k=True)
+        value = self.split_heads(value)
+        if layer_past is not None:
+            past_key, past_value = layer_past[0].transpose(-2, -1), layer_past[1]  # transpose back cf below
+            key = torch.cat((past_key, key), dim=-1)
+            value = torch.cat((past_value, value), dim=-2)
+        present = torch.stack((key.transpose(-2, -1), value))  # transpose to have same shapes for stacking
+        a = self._attn(query, key, value)
+        a = self.merge_heads(a)
+        a = self.c_proj(a)
+        return a, present
+
+
+class MLP(nn.Module):
+    def __init__(self, n_state, config):  # in MLP: n_state=3072 (4 * n_embd)
+        super(MLP, self).__init__()
+        nx = config.n_embd
+        self.c_fc = Conv1D(n_state, nx)
+        self.c_proj = Conv1D(nx, n_state)
+        self.act = gelu
+
+    def forward(self, x):
+        h = self.act(self.c_fc(x))
+        h2 = self.c_proj(h)
+        return h2
+
+
+class Block(nn.Module):
+    def __init__(self, n_ctx, config, scale=False):
+        super(Block, self).__init__()
+        nx = config.n_embd
+        self.ln_1 = LayerNorm(nx, eps=config.layer_norm_epsilon)
+        self.attn = Attention(nx, n_ctx, config, scale)
+        self.ln_2 = LayerNorm(nx, eps=config.layer_norm_epsilon)
+        self.mlp = MLP(4 * nx, config)
+
+    def forward(self, x, layer_past=None):
+        a, present = self.attn(self.ln_1(x), layer_past=layer_past)
+        x = x + a
+        m = self.mlp(self.ln_2(x))
+        x = x + m
+        return x, present
+
+
+class GPT2Model(nn.Module):
+    def __init__(self, config):
+        super(GPT2Model, self).__init__()
+        self.n_layer = config.n_layer
+        self.n_embd = config.n_embd
+        self.n_vocab = config.vocab_size
+
+        self.wte = nn.Embedding(config.vocab_size, config.n_embd)
+        self.wpe = nn.Embedding(config.n_positions, config.n_embd)
+        block = Block(config.n_ctx, config, scale=True)
+        self.h = nn.ModuleList([copy.deepcopy(block) for _ in range(config.n_layer)])
+        self.ln_f = LayerNorm(config.n_embd, eps=config.layer_norm_epsilon)
+
+    def set_embeddings_weights(self, model_embeddings_weights):
+        embed_shape = model_embeddings_weights.shape
+        self.decoder = nn.Linear(embed_shape[1], embed_shape[0], bias=False)
+        self.decoder.weight = model_embeddings_weights  # Tied weights
+
+    def forward(self, input_ids, position_ids=None, token_type_ids=None, past=None):
+        if past is None:
+            past_length = 0
+            past = [None] * len(self.h)
+        else:
+            past_length = past[0][0].size(-2)
+        if position_ids is None:
+            position_ids = torch.arange(past_length, input_ids.size(-1) + past_length, dtype=torch.long,
+                                        device=input_ids.device)
+            position_ids = position_ids.unsqueeze(0).expand_as(input_ids)
+
+        input_shape = input_ids.size()
+        input_ids = input_ids.view(-1, input_ids.size(-1))
+        position_ids = position_ids.view(-1, position_ids.size(-1))
+
+        inputs_embeds = self.wte(input_ids)
+        position_embeds = self.wpe(position_ids)
+        if token_type_ids is not None:
+            token_type_ids = token_type_ids.view(-1, token_type_ids.size(-1))
+            token_type_embeds = self.wte(token_type_ids)
+        else:
+            token_type_embeds = 0
+        hidden_states = inputs_embeds + position_embeds + token_type_embeds
+        presents = []
+        for block, layer_past in zip(self.h, past):
+            hidden_states, present = block(hidden_states, layer_past)
+            presents.append(present)
+        hidden_states = self.ln_f(hidden_states)
+        output_shape = input_shape + (hidden_states.size(-1),)
+        return hidden_states.view(*output_shape), presents
+
+
+class GPT2LMHead(nn.Module):
+    def __init__(self, model_embeddings_weights, config):
+        super(GPT2LMHead, self).__init__()
+        self.n_embd = config.n_embd
+        self.set_embeddings_weights(model_embeddings_weights)
+
+    def set_embeddings_weights(self, model_embeddings_weights):
+        embed_shape = model_embeddings_weights.shape
+        self.decoder = nn.Linear(embed_shape[1], embed_shape[0], bias=False)
+        self.decoder.weight = model_embeddings_weights  # Tied weights
+
+    def forward(self, hidden_state):
+        # Truncated Language modeling logits (we remove the last token)
+        # h_trunc = h[:, :-1].contiguous().view(-1, self.n_embd)
+        lm_logits = self.decoder(hidden_state)
+        return lm_logits
+
+
+class TransformerGenerator(nn.Module):
+    def __init__(self, config):
+        super(TransformerGenerator, self).__init__()
+        self.transformer = GPT2Model(config)
+        self.lm_head = GPT2LMHead(self.transformer.wte.weight, config)
+
+    def set_tied(self):
+        """ Make sure we are sharing the embeddings
+        """
+        self.lm_head.set_embeddings_weights(self.transformer.wte.weight)
+
+    def forward(self, input_ids, position_ids=None, token_type_ids=None, lm_labels=None, past=None):
+        hidden_states, presents = self.transformer(input_ids, position_ids, token_type_ids, past)
+        lm_logits = self.lm_head(hidden_states)
+        if lm_labels is not None:
+            loss_fct = nn.CrossEntropyLoss(ignore_index=-1)
+            loss = loss_fct(lm_logits.view(-1, lm_logits.size(-1)), lm_labels.view(-1))
+            return loss
+        return lm_logits, presents
+
+    def top_k_logits(self, logits, k):
+        if k == 0:
+            return logits
+        values, _ = torch.topk(logits, k)
+        min_values = values[:, -1]
+        return torch.where(logits < min_values, torch.ones_like(logits, dtype=logits.dtype) * -1e10, logits)
+
+    def sample_sequence(self, model, length, start_token=None, batch_size=None, context=None, temperature=1, top_k=0,
+                        device='cuda', sample=True):
+        if start_token is None:
+            assert context is not None, 'Specify exactly one of start_token and context!'
+            context = torch.tensor(context, device=device, dtype=torch.long).unsqueeze(0).repeat(batch_size, 1)
+        else:
+            assert context is None, 'Specify exactly one of start_token and context!'
+            context = torch.full((batch_size, 1), start_token, device=device, dtype=torch.long)
+        prev = context
+        output = context
+        past = None
+        with torch.no_grad():
+            for i in trange(length):
+                logits, past = model(prev, past=past)
+                logits = logits[:, -1, :] / temperature
+                logits = self.top_k_logits(logits, k=top_k)
+                log_probs = F.softmax(logits, dim=-1)
+                if sample:
+                    prev = torch.multinomial(log_probs, num_samples=1)
+                else:
+                    _, prev = torch.topk(log_probs, k=1, dim=-1)
+                output = torch.cat((output, prev), dim=1)
+        return output
