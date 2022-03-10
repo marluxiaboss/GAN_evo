@@ -17,12 +17,12 @@ import torch
 class GPT2Config(object):
     def __init__(
             self,
-            vocab_size_or_config_json_file=vocab_size,
+            vocab_size_or_config_json_file=4683,
             n_positions=1024,
             n_ctx=1024,
-            n_embd=768,
-            n_layer=12,
-            n_head=12,
+            n_embd=16,
+            n_layer=3,
+            n_head=4,
             layer_norm_epsilon=1e-5,
             initializer_range=0.02,
     ):
