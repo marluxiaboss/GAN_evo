@@ -11,8 +11,10 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.parameter import Parameter
 from tqdm import trange
 
+import copy
 import config as cfg
 from utils.helpers import truncated_normal_
 
@@ -262,8 +264,8 @@ class GPT2Model(nn.Module):
         else:
             past_length = past[0][0].size(-2)
         if position_ids is None:
-            position_ids = torch.arange(past_length, input_ids.size(-1) + past_length, dtype=torch.long,
-                                        device=input_ids.device)
+            position_ids = torch.arange(past_length, input_ids.size(-1) + past_length, dtype=torch.long)
+            #device=input_ids.device)
             position_ids = position_ids.unsqueeze(0).expand_as(input_ids)
 
         input_shape = input_ids.size()
@@ -336,10 +338,12 @@ class TransformerGenerator(nn.Module):
                         device='cuda', sample=True):
         if start_token is None:
             assert context is not None, 'Specify exactly one of start_token and context!'
-            context = torch.tensor(context, device=device, dtype=torch.long).unsqueeze(0).repeat(batch_size, 1)
+            context = torch.tensor(context, dtype=torch.long).unsqueeze(0).repeat(batch_size, 1)
+            #device...
         else:
             assert context is None, 'Specify exactly one of start_token and context!'
-            context = torch.full((batch_size, 1), start_token, device=device, dtype=torch.long)
+            context = torch.full((batch_size, 1), start_token, dtype=torch.long)
+            #device =...
         prev = context
         output = context
         past = None
@@ -360,8 +364,8 @@ class TransformerGenerator(nn.Module):
                         device='cuda', sample=True):
         output = torch.zeros(nbr_sequence, length)
         for i in range(nbr_sequence):
-            output[i] = self.sample_sequence(length, start_token, batch_size, context, temperature, top_k,
-                                             device, sample)
+            output[i] = self.sample_sequence(length, start_token=start_token, batch_size=batch_size, context=context,
+                                             temperature=temperature, top_k=top_k, device=device, sample=sample)
         return output
 
 

@@ -21,7 +21,6 @@ class SADPGANInstructor(SelfAttentionInstructor):
         self.dis = SA_DPGAN_D(config)
         self.init_model()
 
-
         # Optimizer
         self.gen_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
         self.gen_adv_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)

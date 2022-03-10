@@ -361,9 +361,10 @@ class SelfAttentionInstructor:
             if cfg.CUDA:
                 inp, target = inp.cuda()
             #print(f"inp: {inp} \n target: {target}")
-            # TODO: what is lm_labels ? is it exactly the target ?
-            pred = model.forward(inp, lm_labels=target)  # [max_seq_len * batch_size, vocab_size]
-            loss = criterion(pred, target.view(-1))
+            # TODO: what is lm_labels ? is it exactly the target ?: probably
+            loss = model.forward(inp, lm_labels=target)  # [max_seq_len * batch_size, vocab_size]
+            #loss = criterion(pred, target.view(-1))
+            # TODO: is there something to change with optimizer ?
             self.optimize(optimizer, loss, model)
             total_loss += loss.item()
         return total_loss / len(data_loader)
@@ -468,12 +469,12 @@ class SelfAttentionInstructor:
         """
         with torch.no_grad():
             # Prepare data for evaluation
-            eval_samples = self.gen.sample_nsequence(cfg.samples_num, cfg.max_seq_len, batch_size=4 * cfg.batch_size,
-                                                    temperature=0.7, top_k=40)
+            eval_samples = self.gen.sample_nsequence(cfg.samples_num, cfg.max_seq_len, start_token=cfg.start_letter,
+                                                     batch_size=4 * cfg.batch_size, temperature=0.7, top_k=40)
             gen_data = GenDataIter(eval_samples)
             gen_tokens = tensor_to_tokens(eval_samples, self.idx2word_dict)
-            gen_tokens_s = tensor_to_tokens(self.gen.sample_nsequence(200, cfg.max_seq_len,
-                                                    200, temperature=0.7, top_k=40), self.idx2word_dict)
+            gen_tokens_s = tensor_to_tokens(self.gen.sample_nsequence(200, cfg.max_seq_len, start_token=cfg.start_letter,
+                                                    batch_size=200, temperature=0.7, top_k=40), self.idx2word_dict)
             
 
             # Reset metrics
@@ -523,7 +524,8 @@ class SelfAttentionInstructor:
         if phase != 'ADV':
             torch.save(self.gen.state_dict(), cfg.save_model_root + 'gen_{}_{:05d}.pt'.format(phase, epoch))
         save_sample_path = cfg.save_samples_root + 'samples_{}_{:05d}.txt'.format(phase, epoch)
-        samples = self.gen.sample_sequence(cfg.batch_size, cfg.batch_size)
+        samples = self.gen.sample_nsequence(cfg.samples_num, cfg.max_seq_len, start_token=cfg.start_letter,
+                                            batch_size=4 * cfg.batch_size, temperature=0.7, top_k=40)
         write_tokens(save_sample_path, tensor_to_tokens(samples, self.idx2word_dict))
 
     def update_temperature(self, i, N):

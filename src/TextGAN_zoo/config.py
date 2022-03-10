@@ -17,7 +17,7 @@ import torch
 class GPT2Config(object):
     def __init__(
             self,
-            vocab_size_or_config_json_file=50257,
+            vocab_size_or_config_json_file=vocab_size,
             n_positions=1024,
             n_ctx=1024,
             n_embd=768,
