@@ -468,10 +468,12 @@ class SelfAttentionInstructor:
         """
         with torch.no_grad():
             # Prepare data for evaluation
-            eval_samples = self.gen.sample_sequence(cfg.samples_num, 4 * cfg.batch_size)
+            eval_samples = self.gen.sample_nsequence(cfg.samples_num, cfg.max_seq_len, batch_size=4 * cfg.batch_size,
+                                                    temperature=0.7, top_k=40)
             gen_data = GenDataIter(eval_samples)
             gen_tokens = tensor_to_tokens(eval_samples, self.idx2word_dict)
-            gen_tokens_s = tensor_to_tokens(self.gen.sample_sequence(200, 200), self.idx2word_dict)
+            gen_tokens_s = tensor_to_tokens(self.gen.sample_nsequence(200, cfg.max_seq_len,
+                                                    200, temperature=0.7, top_k=40), self.idx2word_dict)
             
 
             # Reset metrics
@@ -485,7 +487,7 @@ class SelfAttentionInstructor:
             return ', '.join(['%s = %s' % (metric.get_name(), metric.get_score()) for metric in self.all_metrics])
         else:
             return [metric.get_score() for metric in self.all_metrics]
-
+    """
     def cal_metrics_with_label(self, label_i):
         assert type(label_i) == int, 'missing label'
 
@@ -514,7 +516,7 @@ class SelfAttentionInstructor:
         if fmt_str:
             return ', '.join(['%s = %s' % (metric.get_name(), score)
                               for (metric, score) in zip(self.all_metrics, all_scores)])
-        return all_scores
+        return all_scores """
 
     def _save(self, phase, epoch):
         """Save model state dict and generator's samples"""

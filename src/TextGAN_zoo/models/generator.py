@@ -332,7 +332,7 @@ class TransformerGenerator(nn.Module):
         min_values = values[:, -1]
         return torch.where(logits < min_values, torch.ones_like(logits, dtype=logits.dtype) * -1e10, logits)
 
-    def sample_sequence(self, model, length, start_token=None, batch_size=None, context=None, temperature=1, top_k=0,
+    def sample_sequence(self, length, start_token=None, batch_size=None, context=None, temperature=1, top_k=0,
                         device='cuda', sample=True):
         if start_token is None:
             assert context is not None, 'Specify exactly one of start_token and context!'
@@ -345,7 +345,7 @@ class TransformerGenerator(nn.Module):
         past = None
         with torch.no_grad():
             for i in trange(length):
-                logits, past = model(prev, past=past)
+                logits, past = self(prev, past=past)
                 logits = logits[:, -1, :] / temperature
                 logits = self.top_k_logits(logits, k=top_k)
                 log_probs = F.softmax(logits, dim=-1)
@@ -355,3 +355,13 @@ class TransformerGenerator(nn.Module):
                     _, prev = torch.topk(log_probs, k=1, dim=-1)
                 output = torch.cat((output, prev), dim=1)
         return output
+
+    def sample_nsequence(self, nbr_sequence, length, start_token=None, batch_size=None, context=None, temperature=1, top_k=0,
+                        device='cuda', sample=True):
+        output = torch.zeros(nbr_sequence, length)
+        for i in range(nbr_sequence):
+            output[i] = self.sample_sequence(length, start_token, batch_size, context, temperature, top_k,
+                                             device, sample)
+        return output
+
+
