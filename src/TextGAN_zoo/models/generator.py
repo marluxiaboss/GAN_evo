@@ -331,9 +331,11 @@ class TransformerGenerator(nn.Module):
         if k == 0:
             return logits
         values, _ = torch.topk(logits, k)
+        # these lines were modified because it didn't work when batch size > 1
         min_values = values[:, -1]
-        return torch.where(logits < min_values, torch.ones_like(logits, dtype=logits.dtype) * -1e10, logits)
-
+        logits = logits.transpose(0, 1)
+        values = torch.where(logits < min_values, torch.ones_like(logits, dtype=logits.dtype) * -1e10, logits)
+        return values.transpose(0, 1)
     def sample_sequence(self, length, start_token=None, batch_size=None, context=None, temperature=1, top_k=0,
                         device='cuda', sample=True):
         if start_token is None:
