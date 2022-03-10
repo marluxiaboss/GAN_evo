@@ -331,7 +331,8 @@ class SelfAttentionInstructor:
         self.self_bleu = BLEU('Self-BLEU', gram=[2, 3, 4], if_use=cfg.use_self_bleu)
         self.clas_acc = ACC(if_use=cfg.use_clas_acc)
         self.ppl = PPL(self.train_data, self.test_data, n_gram=5, if_use=cfg.use_ppl)
-        self.all_metrics = [self.bleu, self.nll_gen, self.nll_div, self.self_bleu, self.ppl]
+        # reduced temporarly
+        self.all_metrics = [self.bleu]
 
     def _run(self):
         print('Nothing to run in Self Attention Basic Instructor!')
@@ -469,11 +470,11 @@ class SelfAttentionInstructor:
         """
         with torch.no_grad():
             # Prepare data for evaluation
-            eval_samples = self.gen.sample_nsequence(cfg.samples_num, cfg.max_seq_len, start_token=cfg.start_letter,
-                                                     batch_size=4 * cfg.batch_size, temperature=0.7, top_k=40)
+            eval_samples = self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
+                                                     batch_size=cfg.samples_num, temperature=0.7, top_k=40)
             gen_data = GenDataIter(eval_samples)
             gen_tokens = tensor_to_tokens(eval_samples, self.idx2word_dict)
-            gen_tokens_s = tensor_to_tokens(self.gen.sample_nsequence(200, cfg.max_seq_len, start_token=cfg.start_letter,
+            gen_tokens_s = tensor_to_tokens(self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
                                                     batch_size=200, temperature=0.7, top_k=40), self.idx2word_dict)
             
 
@@ -524,8 +525,8 @@ class SelfAttentionInstructor:
         if phase != 'ADV':
             torch.save(self.gen.state_dict(), cfg.save_model_root + 'gen_{}_{:05d}.pt'.format(phase, epoch))
         save_sample_path = cfg.save_samples_root + 'samples_{}_{:05d}.txt'.format(phase, epoch)
-        samples = self.gen.sample_nsequence(cfg.samples_num, cfg.max_seq_len, start_token=cfg.start_letter,
-                                            batch_size=4 * cfg.batch_size, temperature=0.7, top_k=40)
+        samples = self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
+                                            batch_size=cfg.samples_num, temperature=0.7, top_k=40)
         write_tokens(save_sample_path, tensor_to_tokens(samples, self.idx2word_dict))
 
     def update_temperature(self, i, N):

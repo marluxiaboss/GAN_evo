@@ -362,12 +362,13 @@ class TransformerGenerator(nn.Module):
                 output = torch.cat((output, prev), dim=1)
         return output
 
+    """
     def sample_nsequence(self, nbr_sequence, length, start_token=None, batch_size=None, context=None, temperature=1, top_k=0,
                         device='cuda', sample=True):
         output = torch.zeros(nbr_sequence, length)
         for i in range(nbr_sequence):
             output[i] = self.sample_sequence(length, start_token=start_token, batch_size=batch_size, context=context,
                                              temperature=temperature, top_k=top_k, device=device, sample=sample)
-        return output
+        return output"""
 
 
