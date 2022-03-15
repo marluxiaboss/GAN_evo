@@ -29,7 +29,7 @@ scriptname = 'main.py'
 if_test = int(False)
 run_model = 'sa_dpgan'
 sa = int(True)
-CUDA = int(False)
+CUDA = int(True)
 oracle_pretrain = int(False)
 gen_pretrain = int(False)
 dis_pretrain = int(False)
@@ -50,9 +50,9 @@ dis_init = 'uniform'
 samples_num = 1000
 batch_size = 64
 max_seq_len = 20
-gen_lr = 0.01
+gen_lr = 1e-5
 dis_lr = 0.01
-pre_log_step = 10
+pre_log_step = 40
 adv_log_step = 1
 
 # ===Generator===

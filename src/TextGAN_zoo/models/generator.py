@@ -271,6 +271,8 @@ class GPT2Model(nn.Module):
         input_shape = input_ids.size()
         input_ids = input_ids.view(-1, input_ids.size(-1))
         position_ids = position_ids.view(-1, position_ids.size(-1))
+        if cfg.CUDA:
+            input_ids, position_ids = input_ids.cuda(), position_ids.cuda()
 
         inputs_embeds = self.wte(input_ids)
         position_embeds = self.wpe(position_ids)
@@ -349,6 +351,8 @@ class TransformerGenerator(nn.Module):
         prev = context
         output = context
         past = None
+        if cfg.CUDA:
+            prev, output = prev.cuda(), output.cuda()
         with torch.no_grad():
             for i in trange(length):
                 logits, past = self(prev, past=past)

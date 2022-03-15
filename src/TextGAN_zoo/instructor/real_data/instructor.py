@@ -360,7 +360,7 @@ class SelfAttentionInstructor:
             inp, target = data['input'], data['target'] #[batch_size, max_seq_len], [batch_size, max_seq_len]
             inp = inp.transpose(1, 0).contiguous()       # [max_seq_len, batch_size]
             if cfg.CUDA:
-                inp, target = inp.cuda()
+                inp, target = inp.cuda(), target.cuda()
             #print(f"inp: {inp} \n target: {target}")
             # TODO: what is lm_labels ? is it exactly the target ?: probably
             loss = model.forward(inp, lm_labels=target)  # [max_seq_len * batch_size, vocab_size]

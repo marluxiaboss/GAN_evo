@@ -17,7 +17,7 @@ import torch
 class GPT2Config(object):
     def __init__(
             self,
-            vocab_size_or_config_json_file=4683,
+            vocab_size_or_config_json_file=4658,
             n_positions=1024,
             n_ctx=1024,
             n_embd=16,
@@ -93,13 +93,13 @@ start_letter = 1
 padding_idx = 0
 start_token = 'BOS'
 padding_token = 'EOS'
-gen_lr = 0.2  # 0.01
+gen_lr = 0.001  # 0.01
 gen_adv_lr = 0.2  # RelGAN-1e-4
 dis_lr = 0.2  # SeqGAN,LeakGAN-1e-2, RelGAN-1e-4
 clas_lr = 1e-3
 clip_norm = 5.0
 
-pre_log_step = 10
+pre_log_step = 40
 adv_log_step = 20
 
 train_data = 'dataset/' + dataset + '.txt'
