@@ -20,9 +20,9 @@ class GPT2Config(object):
             vocab_size_or_config_json_file=4658,
             n_positions=1024,
             n_ctx=1024,
-            n_embd=16,
-            n_layer=3,
-            n_head=4,
+            n_embd=768,
+            n_layer=12,
+            n_head=12,
             layer_norm_epsilon=1e-5,
             initializer_range=0.02,
     ):

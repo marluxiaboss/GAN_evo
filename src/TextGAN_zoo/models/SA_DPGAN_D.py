@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 
 import config as cfg
-from models.generator import TransformerGenerator
+from models.generator import TransformerGenerator, LSTMGenerator
 from utils.data_loader import GenDataIter
 
 

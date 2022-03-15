@@ -474,15 +474,15 @@ class SelfAttentionInstructor:
                                                      batch_size=cfg.samples_num, temperature=0.7, top_k=40)
             gen_data = GenDataIter(eval_samples)
             gen_tokens = tensor_to_tokens(eval_samples, self.idx2word_dict)
-            gen_tokens_s = tensor_to_tokens(self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
-                                                    batch_size=200, temperature=0.7, top_k=40), self.idx2word_dict)
+            #gen_tokens_s = tensor_to_tokens(self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
+            #                                        batch_size=200, temperature=0.7, top_k=40), self.idx2word_dict)
             
 
             # Reset metrics
             self.bleu.reset(test_text=gen_tokens, real_text=self.test_data.tokens)
             self.nll_gen.reset(self.gen, self.train_data.loader)
             self.nll_div.reset(self.gen, gen_data.loader)
-            self.self_bleu.reset(test_text=gen_tokens_s, real_text=gen_tokens)
+            #self.self_bleu.reset(test_text=gen_tokens_s, real_text=gen_tokens)
             self.ppl.reset(gen_tokens)
 
         if fmt_str:

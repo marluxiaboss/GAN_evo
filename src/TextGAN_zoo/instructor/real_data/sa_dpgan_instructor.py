@@ -4,6 +4,7 @@ import torch.optim as optim
 import config as cfg
 from instructor.real_data.instructor import SelfAttentionInstructor
 from instructor.real_data.instructor import BasicInstructor
+from models.DPGAN_D import DPGAN_D
 from models.SA_DPGAN_D import SA_DPGAN_D
 from models.SA_DPGAN_G import SA_DPGAN_G
 
@@ -18,7 +19,8 @@ class SADPGANInstructor(SelfAttentionInstructor):
         config = cfg.GPT2Config()
         # generator, discriminator
         self.gen = SA_DPGAN_G(config)
-        self.dis = SA_DPGAN_D(config)
+        self.dis = DPGAN_D(cfg.gen_embed_dim, cfg.gen_hidden_dim, cfg.vocab_size, cfg.max_seq_len,
+                           cfg.padding_idx, gpu=cfg.CUDA)
         self.init_model()
 
         # Optimizer
