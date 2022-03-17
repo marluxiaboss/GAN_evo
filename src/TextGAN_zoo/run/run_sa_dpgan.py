@@ -52,7 +52,7 @@ batch_size = 64
 max_seq_len = 37
 gen_lr = 0.00002
 dis_lr = 0.01
-pre_log_step = 40
+pre_log_step = 10
 adv_log_step = 1
 
 # ===Generator===

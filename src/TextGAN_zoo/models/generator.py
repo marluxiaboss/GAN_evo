@@ -354,7 +354,7 @@ class TransformerGenerator(nn.Module):
         if cfg.CUDA:
             prev, output = prev.cuda(), output.cuda()
         with torch.no_grad():
-            for i in trange(length):
+            for i in range(length):
                 logits, past = self(prev, past=past)
                 logits = logits[:, -1, :] / temperature
                 logits = self.top_k_logits(logits, k=top_k)
