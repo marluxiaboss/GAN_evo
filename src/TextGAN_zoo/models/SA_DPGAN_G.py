@@ -20,8 +20,9 @@ class SA_DPGAN_G(TransformerGenerator):
         """
         batch_size, _ = inp.size()
 
-        pred = self.forward(inp)
 
+        logits, past = self(inp)
+        pred = F.softmax(logits, dim=-1)
         #TODO maybe try to sample_sequence the same way as for cal_metrics in instructor
         samples = self.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
                                                      batch_size=batch_size, temperature=0.7,
