@@ -21,7 +21,11 @@ class SA_DPGAN_G(TransformerGenerator):
         batch_size, _ = inp.size()
 
         pred = self.forward(inp)
-        samples = torch.argmax(pred, dim=-1).view(batch_size, -1)
+
+        #TODO maybe try to sample_sequence the same way as for cal_metrics in instructor
+        samples = self.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
+                                                     batch_size=batch_size, temperature=0.7,
+                                                     top_k=1, sample=False)
         log_prob = F.nll_loss(pred, samples.view(-1), reduction='none').view(batch_size, -1)
         # samples = torch.multinomial(torch.exp(log_prob), 1)
 

@@ -28,9 +28,9 @@ class DPGAN_G(LSTMGenerator):
             log_prob: batch_size * seq_len  (log probabilities)
         """
         batch_size, _ = inp.size()
-        hidden = self.init_hidden(batch_size)
 
-        pred = self.forward(inp, hidden)
+        logits, past = self(inp)
+        pred = F.softmax(logits, dim=-1)
         samples = torch.argmax(pred, dim=-1).view(batch_size, -1)
         log_prob = F.nll_loss(pred, samples.view(-1), reduction='none').view(batch_size, -1)
         # samples = torch.multinomial(torch.exp(log_prob), 1)

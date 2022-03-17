@@ -84,7 +84,7 @@ evo_temp_step = 1
 temperature = 1
 
 # ===Basic Train===
-samples_num = 10000  # 10000, mr15: 2000,
+samples_num = 1000  # 10000, mr15: 2000,
 MLE_train_epoch = 120  # SeqGAN-80, LeakGAN-8, RelGAN-150
 PRE_clas_epoch = 10
 inter_epoch = 15  # LeakGAN-10
@@ -93,7 +93,7 @@ start_letter = 1
 padding_idx = 0
 start_token = 'BOS'
 padding_token = 'EOS'
-gen_lr = 0.001  # 0.01
+gen_lr = 1e-5  # 0.01
 gen_adv_lr = 0.2  # RelGAN-1e-4
 dis_lr = 0.2  # SeqGAN,LeakGAN-1e-2, RelGAN-1e-4
 clas_lr = 1e-3

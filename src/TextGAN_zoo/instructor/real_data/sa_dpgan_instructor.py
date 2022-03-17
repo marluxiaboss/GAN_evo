@@ -132,8 +132,9 @@ class SADPGANInstructor(SelfAttentionInstructor):
         # prepare loader for validate
         for step in range(d_step):
             # prepare loader for training
-            pos_samples = self.train_data.target
-            neg_samples = self.gen.new_sample(pos_samples.size(0), 4 * cfg.batch_size)
+            pos_samples = self.train_data.target[:1000,:]
+            neg_samples = self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
+                                                   batch_size=pos_samples.size(0), temperature=0.7, top_k=40)
 
             pos_reward, neg_reward = 0, 0
             for epoch in range(d_epoch):
