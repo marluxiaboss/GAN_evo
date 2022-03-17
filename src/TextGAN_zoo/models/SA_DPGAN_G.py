@@ -23,12 +23,11 @@ class SA_DPGAN_G(TransformerGenerator):
 
         logits, past = self(inp)
         pred = F.softmax(logits, dim=-1)
-        #TODO maybe try to sample_sequence the same way as for cal_metrics in instructor
         samples = self.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
                                                      batch_size=batch_size, temperature=0.7,
                                                      top_k=1, sample=False)
-        log_prob = F.nll_loss(pred, samples.view(-1), reduction='none').view(batch_size, -1)
-        # samples = torch.multinomial(torch.exp(log_prob), 1)
+        log_prob = F.nll_loss(pred.view(-1, cfg.GPT2Config().vocab_size), samples.view(-1),
+                              reduction='none').view(batch_size, -1)
 
         return samples, log_prob
 
