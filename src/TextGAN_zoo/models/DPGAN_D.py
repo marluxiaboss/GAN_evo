@@ -31,6 +31,15 @@ class DPGAN_D(LSTMGenerator):
         pred = self.forward(inp, hidden)
 
         word_reward = F.nll_loss(pred, target.view(-1), reduction='none').view(batch_size, -1)
+        print("PRED")
+        print(pred.size())
+        print(pred[:cfg.max_seq_len, :])
+        print("TARGET")
+        print(target.size())
+        print(target[0])
+        print("WORD_REWARD")
+        print(word_reward.size())
+        print(word_reward[0])
         sentence_reward = torch.mean(word_reward, dim=-1, keepdim=True)
 
         return word_reward, sentence_reward
