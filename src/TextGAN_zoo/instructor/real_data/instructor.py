@@ -471,7 +471,8 @@ class SelfAttentionInstructor:
         with torch.no_grad():
             # Prepare data for evaluation
             eval_samples = self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
-                                                     batch_size=cfg.samples_num, temperature=0.7, top_k=40)
+                                                     batch_size=cfg.samples_num, temperature=0.7, top_k=40,
+                                                    sample_pos2=True)
             gen_data = GenDataIter(eval_samples)
             gen_tokens = tensor_to_tokens(eval_samples, self.idx2word_dict)
             #gen_tokens_s = tensor_to_tokens(self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,

@@ -16,7 +16,9 @@ from tqdm import trange
 
 import copy
 import config as cfg
+import instructor.real_data.sa_dpgan_instructor
 from utils.helpers import truncated_normal_
+from utils.text_process import tensor_to_tokens, load_dict
 
 
 class LSTMGenerator(nn.Module):
@@ -314,6 +316,7 @@ class TransformerGenerator(nn.Module):
         super(TransformerGenerator, self).__init__()
         self.transformer = GPT2Model(config)
         self.lm_head = GPT2LMHead(self.transformer.wte.weight, config)
+        self.word2idx_dict, self.idx2word_dict = load_dict(cfg.dataset)
 
     def set_tied(self):
         """ Make sure we are sharing the embeddings
@@ -339,7 +342,7 @@ class TransformerGenerator(nn.Module):
         values = torch.where(logits < min_values, torch.ones_like(logits, dtype=logits.dtype) * -1e10, logits)
         return values.transpose(0, 1)
     def sample_sequence(self, length, start_token=None, batch_size=None, context=None, temperature=1, top_k=0,
-                        device='cuda', sample=True):
+                        device='cuda', sample=True, sample_pos2=False):
         if start_token is None:
             assert context is not None, 'Specify exactly one of start_token and context!'
             context = torch.tensor(context, dtype=torch.long).unsqueeze(0).repeat(batch_size, 1)
@@ -359,6 +362,14 @@ class TransformerGenerator(nn.Module):
                 logits = logits[:, -1, :] / temperature
                 logits = self.top_k_logits(logits, k=top_k)
                 log_probs = F.softmax(logits, dim=-1)
+                if sample_pos2:
+                    if i == 1:
+                        print("10 most probable token at position 2: ")
+                        sample_prob = log_probs[0]
+                        prob_top_pred, sample_top_pred = torch.topk(sample_prob, 10)
+                        tokens = [self.idx2word_dict[str(i)] for i in sample_top_pred.tolist()]
+                        print(prob_top_pred)
+                        print(tokens)
                 if sample:
                     prev = torch.multinomial(log_probs, num_samples=1)
                 else:
