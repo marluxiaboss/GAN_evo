@@ -40,6 +40,7 @@ class LSTMGenerator(nn.Module):
         self.lstm = nn.LSTM(embedding_dim, hidden_dim, batch_first=True)
         self.lstm2out = nn.Linear(hidden_dim, vocab_size)
         self.softmax = nn.LogSoftmax(dim=-1)
+        self.word2idx_dict, self.idx2word_dict = load_dict(cfg.dataset)
 
         self.init_params()
 
