@@ -27,6 +27,7 @@ class GPT2Config(object):
             layer_norm_epsilon=1e-5,
             initializer_range=0.02,
     ): """
+    """
     def __init__(
             self,
             vocab_size_or_config_json_file=4658,
@@ -35,6 +36,17 @@ class GPT2Config(object):
             n_embd=16,
             n_layer=3,
             n_head=4,
+            layer_norm_epsilon=1e-5,
+            initializer_range=0.02,
+    ): """
+    def __init__(
+            self,
+            vocab_size_or_config_json_file=5256, #4658 for image coco
+            n_positions=1024, #1024 old
+            n_ctx=1024,
+            n_embd=120,
+            n_layer=6,
+            n_head=6,
             layer_norm_epsilon=1e-5,
             initializer_range=0.02,
     ):
