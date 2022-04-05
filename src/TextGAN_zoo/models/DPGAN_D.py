@@ -21,7 +21,7 @@ class DPGAN_D(LSTMGenerator):
         super(DPGAN_D, self).__init__(embedding_dim, hidden_dim, vocab_size, max_seq_len, padding_idx, gpu)
         self.name = 'dpgan_d'
 
-    def getReward(self, samples):
+    def getReward(self, samples, pos_or_neg_sample=null):
         """
         Get word-level reward and sentence-level reward of samples.
         """
@@ -32,14 +32,9 @@ class DPGAN_D(LSTMGenerator):
         pred = self.forward(inp, hidden)
 
         word_reward = F.nll_loss(pred, target.view(-1), reduction='none').view(batch_size, -1)
-        print("PRED")
-        onebatch_pred = pred[:cfg.max_seq_len, :]
-        for i in range(10):
-            one_batch_pred_toki = onebatch_pred[i]
-            prob_top_pred, sample_top_pred = torch.topk(one_batch_pred_toki, 3)
-            tokens_pred = [self.idx2word_dict[str(i)] for i in sample_top_pred.tolist()]
-            print(str(i) + "     : ", end='')
-            print(tokens_pred)
+
+        if pos_or_neg_sample != null:
+            print(pos_or_neg_sample)
         print("TARGET")
         onebatch_targ = target[0]
         tokens_targ = [self.idx2word_dict[str(i)] for i in onebatch_targ.tolist()]
@@ -48,5 +43,6 @@ class DPGAN_D(LSTMGenerator):
         onebatch_reward = word_reward[0]
         print(onebatch_reward)
         sentence_reward = torch.mean(word_reward, dim=-1, keepdim=True)
-
+        print("SENTENCE_REWARD")
+        print(sentence_reward)
         return word_reward, sentence_reward
