@@ -13,7 +13,6 @@ import torch.nn.functional as F
 import config as cfg
 from models.generator import LSTMGenerator
 from utils.data_loader import GenDataIter
-from utils.text_process import load_dict
 
 
 class DPGAN_D(LSTMGenerator):
@@ -21,7 +20,7 @@ class DPGAN_D(LSTMGenerator):
         super(DPGAN_D, self).__init__(embedding_dim, hidden_dim, vocab_size, max_seq_len, padding_idx, gpu)
         self.name = 'dpgan_d'
 
-    def getReward(self, samples, pos_or_neg_sample=null):
+    def getReward(self, samples, pos_or_neg_sample=None):
         """
         Get word-level reward and sentence-level reward of samples.
         """
@@ -33,7 +32,7 @@ class DPGAN_D(LSTMGenerator):
 
         word_reward = F.nll_loss(pred, target.view(-1), reduction='none').view(batch_size, -1)
 
-        if pos_or_neg_sample != null:
+        if pos_or_neg_sample is not None:
             print(pos_or_neg_sample)
         print("TARGET")
         onebatch_targ = target[0]
@@ -44,5 +43,5 @@ class DPGAN_D(LSTMGenerator):
         print(onebatch_reward)
         sentence_reward = torch.mean(word_reward, dim=-1, keepdim=True)
         print("SENTENCE_REWARD")
-        print(sentence_reward)
+        print(sentence_reward[0])
         return word_reward, sentence_reward
