@@ -25,7 +25,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
 
         # generator, discriminator
         self.gen = GPT_2()
-        self.dis = DPGAN_D(cfg.gen_embed_dim, cfg.gen_hidden_dim, cfg.vocab_size, cfg.max_seq_len,
+        self.dis = DPGAN_D(cfg.gen_embed_dim, cfg.gen_hidden_dim, self.gen.config.vocab_size, cfg.max_seq_len,
                            cfg.padding_idx, gpu=cfg.CUDA)
         self.init_model()
 
