@@ -40,7 +40,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         self.gen = helpers.load_weight(self.gen, pretrained_model.state_dict())
 
         # Tokenizer for the pretrained gpt2
-        tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+        self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 
     def init_model(self):
         """
@@ -176,10 +176,10 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             # Prepare data for evaluation
             eval_samples = self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
                                                     batch_size=cfg.samples_num, temperature=0.7, top_k=40,
-                                                    sample_pos2=True)
+                                                    sample_pos2=False)
             gen_data = GenDataIter(eval_samples)
             #gen_tokens = tensor_to_tokens(eval_samples, self.idx2word_dict)
-            gen_tokens = self.tokenizer.decode(eval_samples)
+            gen_tokens = [self.tokenizer.decode(eval_sample) for eval_sample in eval_samples]
             # gen_tokens_s = tensor_to_tokens(self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
             #                                        batch_size=200, temperature=0.7, top_k=40), self.idx2word_dict)
 

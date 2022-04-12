@@ -1,6 +1,9 @@
+import torch
+import torch.nn.functional as F
+from transformers import GPT2Tokenizer
+
 import config as cfg
 from models.generator import TransformerGenerator
-import torch.nn.functional as F
 
 
 class GPT_2(TransformerGenerator):
@@ -13,6 +16,7 @@ class GPT_2(TransformerGenerator):
                                      n_head=12,
                                      layer_norm_epsilon=1e-5,
                                      initializer_range=0.02)
+        self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
         super(GPT_2, self).__init__(self.config)
 
     """
@@ -37,7 +41,46 @@ class GPT_2(TransformerGenerator):
         samples = self.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
                                        batch_size=batch_size, temperature=0.7,
                                        top_k=1, sample=False)
-        log_prob = F.nll_loss(pred.view(-1, cfg.GPT2Config().vocab_size), samples.view(-1),
+        log_prob = F.nll_loss(pred.view(-1, self.config.vocab_size), samples.view(-1),
                               reduction='none').view(batch_size, -1)
 
         return samples, log_prob
+
+    def sample_sequence(self, length, start_token=None, batch_size=None, context=None, temperature=1, top_k=0,
+                        device='cuda', sample=True, sample_pos2=False):
+        """
+        Overwrites sample_sequence in generator.py to add the tokenizer for pretrained gpt2
+        """
+        if start_token is None:
+            assert context is not None, 'Specify exactly one of start_token and context!'
+            context = torch.tensor(context, dtype=torch.long).unsqueeze(0).repeat(batch_size, 1)
+            #device...
+        else:
+            assert context is None, 'Specify exactly one of start_token and context!'
+            context = torch.full((batch_size, 1), start_token, dtype=torch.long)
+            #device =...
+        prev = context
+        output = context
+        past = None
+        if cfg.CUDA:
+            prev, output = prev.cuda(), output.cuda()
+        with torch.no_grad():
+            for i in range(length):
+                logits, past = self(prev, past=past)
+                logits = logits[:, -1, :] / temperature
+                logits = self.top_k_logits(logits, k=top_k)
+                log_probs = F.softmax(logits, dim=-1)
+                if sample_pos2:
+                    if i == 1:
+                        print("10 most probable token at position 2: ")
+                        sample_prob = log_probs[0]
+                        prob_top_pred, sample_top_pred = torch.topk(sample_prob, 10)
+                        tokens = [self.idx2word_dict[str(i)] for i in sample_top_pred.tolist()]
+                        print(prob_top_pred)
+                        print(tokens)
+                if sample:
+                    prev = torch.multinomial(log_probs, num_samples=1)
+                else:
+                    _, prev = torch.topk(log_probs, k=1, dim=-1)
+                output = torch.cat((output, prev), dim=1)
+        return output
