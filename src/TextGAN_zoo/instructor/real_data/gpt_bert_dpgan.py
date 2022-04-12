@@ -172,32 +172,26 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         Overwrites cal_metrics from BasicInstructor, because we need to use a specific
         tokenizer for the pretrained gpt2
         """
+        with torch.no_grad():
+            # Prepare data for evaluation
+            eval_samples = self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
+                                                    batch_size=cfg.samples_num, temperature=0.7, top_k=40,
+                                                    sample_pos2=True)
+            gen_data = GenDataIter(eval_samples)
+            #gen_tokens = tensor_to_tokens(eval_samples, self.idx2word_dict)
+            gen_tokens = self.tokenizer.decode(eval_samples)
+            # gen_tokens_s = tensor_to_tokens(self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
+            #                                        batch_size=200, temperature=0.7, top_k=40), self.idx2word_dict)
 
-        def cal_metrics(self, fmt_str=False):
-            """
-            Calculate metrics
-            :param fmt_str: if return format string for logging
-            """
-            with torch.no_grad():
-                # Prepare data for evaluation
-                eval_samples = self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
-                                                        batch_size=cfg.samples_num, temperature=0.7, top_k=40,
-                                                        sample_pos2=True)
-                gen_data = GenDataIter(eval_samples)
-                #gen_tokens = tensor_to_tokens(eval_samples, self.idx2word_dict)
-                gen_tokens = self.tokenizer.decode(eval_samples)
-                # gen_tokens_s = tensor_to_tokens(self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
-                #                                        batch_size=200, temperature=0.7, top_k=40), self.idx2word_dict)
+            # Reset metrics
+            self.bleu.reset(test_text=gen_tokens, real_text=self.test_data.tokens)
+            self.nll_gen.reset(self.gen, self.train_data.loader)
+            self.nll_div.reset(self.gen, gen_data.loader)
+            # self.self_bleu.reset(test_text=gen_tokens_s, real_text=gen_tokens)
+            self.ppl.reset(gen_tokens)
 
-                # Reset metrics
-                self.bleu.reset(test_text=gen_tokens, real_text=self.test_data.tokens)
-                self.nll_gen.reset(self.gen, self.train_data.loader)
-                self.nll_div.reset(self.gen, gen_data.loader)
-                # self.self_bleu.reset(test_text=gen_tokens_s, real_text=gen_tokens)
-                self.ppl.reset(gen_tokens)
-
-            if fmt_str:
-                return ', '.join(['%s = %s' % (metric.get_name(), metric.get_score()) for metric in self.all_metrics])
-            else:
-                return [metric.get_score() for metric in self.all_metrics]
+        if fmt_str:
+            return ', '.join(['%s = %s' % (metric.get_name(), metric.get_score()) for metric in self.all_metrics])
+        else:
+            return [metric.get_score() for metric in self.all_metrics]
 
