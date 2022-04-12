@@ -13,7 +13,6 @@ import torch.optim as optim
 import config as cfg
 from instructor.real_data.instructor import BasicInstructor
 from models.DPGAN_D import DPGAN_D
-from models.DPGAN_G import DPGAN_G
 from models.generator import GPT2Model
 
 

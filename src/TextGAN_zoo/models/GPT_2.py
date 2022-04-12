@@ -1,10 +1,16 @@
-from models.generator import GPT2Model
+import config as cfg
+from models.generator import TransformerGenerator
+import torch.nn.functional as F
 
 
-class GPT_2(GPT2Model):
-    def __init__(self, gen, config):
+class GPT_2(TransformerGenerator):
+    def __init__(self, config):
         super(GPT_2, self).__init__(config)
-        self.gen = GPT2Model.from_pretrained('gpt2')
+
+    def sample_sequence(self, length, start_token=None, batch_size=None, context=None, temperature=1, top_k=0,
+                        device='cuda', sample=True, sample_pos2=False):
+        # TODO: should I assume that the input is already tokenized or maybe I can tokenize here
+
 
     def sample_teacher_forcing(self, inp):
         """
@@ -16,9 +22,14 @@ class GPT_2(GPT2Model):
             log_prob: batch_size * seq_len  (log probabilities)
         """
         batch_size, _ = inp.size()
-        hidden = self.init_hidden(batch_size)
 
-        pred = self.forward(inp, hidden)
-        samples = torch.argmax(pred, dim=-1).view(batch_size, -1)
-        log_prob = F.nll_loss(pred, samples.view(-1), reduction='none').view(batch_size, -1)
-        # samples = torch.multinomial(torch.exp(log_prob), 1)
+
+        logits, past = self(inp)
+        pred = F.softmax(logits, dim=-1)
+        samples = self.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
+                                                     batch_size=batch_size, temperature=0.7,
+                                                     top_k=1, sample=False)
+        log_prob = F.nll_loss(pred.view(-1, cfg.GPT2Config().vocab_size), samples.view(-1),
+                              reduction='none').view(batch_size, -1)
+
+        return samples, log_prob
