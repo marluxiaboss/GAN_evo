@@ -13,7 +13,10 @@ import torch.optim as optim
 import config as cfg
 from instructor.real_data.instructor import BasicInstructor
 from models.DPGAN_D import DPGAN_D
-from models.generator import GPT2Model
+from models.GPT_2 import GPT_2
+from transformers import GPT2Model
+
+from utils import helpers
 
 
 class GPT_BERT_DPGAN(BasicInstructor):
@@ -21,7 +24,7 @@ class GPT_BERT_DPGAN(BasicInstructor):
         super(GPT_BERT_DPGAN, self).__init__(opt)
 
         # generator, discriminator
-        self.gen = GPT2Model.from_pretrained('gpt2')
+        self.gen = GPT_2()
         self.dis = DPGAN_D(cfg.gen_embed_dim, cfg.gen_hidden_dim, cfg.vocab_size, cfg.max_seq_len,
                            cfg.padding_idx, gpu=cfg.CUDA)
         self.init_model()
@@ -30,6 +33,10 @@ class GPT_BERT_DPGAN(BasicInstructor):
         self.gen_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
         self.gen_adv_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
         self.dis_opt = optim.Adam(self.dis.parameters(), lr=cfg.dis_lr)
+
+        # Load weights from huggingface GPT_2 transformer class
+        pretrained_model = GPT2Model.from_pretrained("gpt2")
+        self.gen = helpers.load_weight(self.gen, pretrained_model.state_dict())
 
     def _run(self):
         # # ===TRAIN DISCRIMINATOR====

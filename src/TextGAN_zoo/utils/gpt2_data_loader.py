@@ -3,10 +3,12 @@ from transformers import GPT2Tokenizer
 import config as cfg
 
 from utils.data_loader import GenDataIter
+from utils.text_process import get_tokenlized
 
 
 class gpt2_data_loader(GenDataIter):
     def __init__(self):
+        self.tokens = None
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 
     @staticmethod
@@ -20,8 +22,9 @@ class gpt2_data_loader(GenDataIter):
             max_length=cfg.max_seq_length,
         )
 
-    def gpt_2_tokenize_dataset(self, dataset):
+    def load_data(self, dataset):
         dataset_path = 'dataset/{}.txt'.format(dataset)
+        self.tokens = get_tokenlized(dataset_path)
         dataset = datasets.load_dataset('text', data_files=dataset_path)
 
         tokenized_dataset = dataset.map(
@@ -30,6 +33,6 @@ class gpt2_data_loader(GenDataIter):
             remove_columns=["text"],
         )
 
-        return tokenized_dataset
+        return self.prepare(tokenized_dataset)
 
 

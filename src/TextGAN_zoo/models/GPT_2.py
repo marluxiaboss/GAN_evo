@@ -4,13 +4,21 @@ import torch.nn.functional as F
 
 
 class GPT_2(TransformerGenerator):
-    def __init__(self, config):
+    def __init__(self):
+        config = cfg.GPT2Config(vocab_size_or_config_json_file=50257,
+                                n_positions=1024,
+                                n_ctx=1024,
+                                n_embd=768,
+                                n_layer=12,
+                                n_head=12,
+                                layer_norm_epsilon=1e-5,
+                                initializer_range=0.02)
         super(GPT_2, self).__init__(config)
-
+    """
     def sample_sequence(self, length, start_token=None, batch_size=None, context=None, temperature=1, top_k=0,
                         device='cuda', sample=True, sample_pos2=False):
         # TODO: should I assume that the input is already tokenized or maybe I can tokenize here
-
+    """
 
     def sample_teacher_forcing(self, inp):
         """

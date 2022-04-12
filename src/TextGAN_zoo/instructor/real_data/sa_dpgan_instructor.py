@@ -14,6 +14,7 @@ import config as cfg
 from instructor.real_data.instructor import BasicInstructor
 from models.DPGAN_D import DPGAN_D
 from models.DPGAN_G import DPGAN_G
+from models.SA_DPGAN_G import SA_DPGAN_G
 
 
 class DPGANInstructor(BasicInstructor):
@@ -21,8 +22,9 @@ class DPGANInstructor(BasicInstructor):
         super(DPGANInstructor, self).__init__(opt)
 
         # generator, discriminator
-        self.gen = DPGAN_G(cfg.gen_embed_dim, cfg.gen_hidden_dim, cfg.vocab_size, cfg.max_seq_len,
-                           cfg.padding_idx, gpu=cfg.CUDA)
+        config = cfg.GPT2Config()
+        # generator, discriminator
+        self.gen = SA_DPGAN_G(config)
         self.dis = DPGAN_D(cfg.gen_embed_dim, cfg.gen_hidden_dim, cfg.vocab_size, cfg.max_seq_len,
                            cfg.padding_idx, gpu=cfg.CUDA)
         self.init_model()
