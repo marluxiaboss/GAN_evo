@@ -90,7 +90,7 @@ class GPT_BERT_DPGAN(BasicInstructor):
                 inp = inp.cuda()
 
             gen_sample, gen_sample_log_prob = self.gen.sample_teacher_forcing(inp)
-            word_reward, sentence_reward = self.dis.getReward(gen_sample)
+            word_reward, sentence_reward = self.dis.getReward(gen_sample, pos_or_neg_sample = "NEG")
             sentence_reward = sentence_reward.repeat(1, cfg.max_seq_len)
             reward_matrix = sentence_reward * word_reward * dis_count_matrix
             for i in range(cfg.max_seq_len):
@@ -113,9 +113,9 @@ class GPT_BERT_DPGAN(BasicInstructor):
         # prepare loader for validate
         for step in range(d_step):
             # prepare loader for training
-            pos_samples = self.train_data.target
-            neg_samples = s
-            neg_samples = self.gen.sample(pos_samples.size(0), 4 * cfg.batch_size)
+            pos_samples = self.train_data.target[:100,:]
+            neg_samples = self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
+                                                   batch_size=pos_samples.size(0), temperature=0.7, top_k=40)
 
             pos_reward, neg_reward = 0, 0
             for epoch in range(d_epoch):
@@ -130,8 +130,8 @@ class GPT_BERT_DPGAN(BasicInstructor):
                 torch.save(self.dis.state_dict(), cfg.pretrained_dis_path)
 
     def eval_dis(self, model, pos_val, neg_val):
-        _, pos_reward = model.getReward(pos_val)
-        _, neg_reward = model.getReward(neg_val)
+        _, pos_reward = model.getReward(pos_val, pos_or_neg_sample="POS")
+        _, neg_reward = model.getReward(neg_val, pos_or_neg_sample="NEG")
         return torch.mean(pos_reward), torch.mean(neg_reward)
 
     def train_dis_epoch(self, model, pos_samples, neg_samples, optimizer):
@@ -142,9 +142,10 @@ class GPT_BERT_DPGAN(BasicInstructor):
             pos_sample = pos_samples[i * cfg.batch_size: (i + 1) * cfg.batch_size]
             neg_sample = neg_samples[i * cfg.batch_size: (i + 1) * cfg.batch_size]
 
-            _, pos_reward = model.getReward(pos_sample)
-            _, neg_reward = model.getReward(neg_sample)
+            _, pos_reward = model.getReward(pos_sample, pos_or_neg_sample="POS")
+            _, neg_reward = model.getReward(neg_sample, pos_or_neg_sample="NEG")
 
             loss = -torch.mean(pos_reward) + torch.mean(neg_reward)
             self.optimize(optimizer, loss, model)
         return pos_reward.mean().item(), neg_reward.mean().item()
+

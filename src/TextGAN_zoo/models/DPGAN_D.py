@@ -34,14 +34,16 @@ class DPGAN_D(LSTMGenerator):
 
         if pos_or_neg_sample is not None:
             print(pos_or_neg_sample)
-        print("TARGET")
-        onebatch_targ = target[0]
-        tokens_targ = [self.idx2word_dict[str(i)] for i in onebatch_targ.tolist()]
-        print(tokens_targ)
-        print("WORD_REWARD")
-        onebatch_reward = word_reward[0]
-        print(onebatch_reward)
+
+            print("TARGET")
+            onebatch_targ = target[0]
+            tokens_targ = [self.idx2word_dict[str(i)] for i in onebatch_targ.tolist()]
+            print(tokens_targ)
+            print("WORD_REWARD")
+            onebatch_reward = word_reward[0]
+            print(onebatch_reward)
         sentence_reward = torch.mean(word_reward, dim=-1, keepdim=True)
-        print("SENTENCE_REWARD")
-        print(sentence_reward[0])
+        if pos_or_neg_sample is not None:
+            print("SENTENCE_REWARD")
+            print(sentence_reward[0])
         return word_reward, sentence_reward
