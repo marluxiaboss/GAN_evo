@@ -11,7 +11,7 @@ import torch
 import torch.optim as optim
 
 import config as cfg
-from instructor.real_data.instructor import BasicInstructor
+from instructor.real_data.instructor import BasicInstructor, SelfAttentionInstructor
 from models.DPGAN_D import DPGAN_D
 from models.GPT_2 import GPT_2
 from transformers import GPT2Model
@@ -19,7 +19,7 @@ from transformers import GPT2Model
 from utils import helpers
 
 
-class GPT_BERT_DPGAN(BasicInstructor):
+class GPT_BERT_DPGAN(SelfAttentionInstructor):
     def __init__(self, opt):
         super(GPT_BERT_DPGAN, self).__init__(opt)
 
@@ -37,6 +37,19 @@ class GPT_BERT_DPGAN(BasicInstructor):
         # Load weights from huggingface GPT_2 transformer class
         pretrained_model = GPT2Model.from_pretrained("gpt2")
         self.gen = helpers.load_weight(self.gen, pretrained_model.state_dict())
+
+    def init_model(self):
+        """
+        Overwrites the init_model() in instructor.py
+        """
+        if cfg.dis_pretrain:
+            self.log.info(
+                'Load pre-trained discriminator: {}'.format(cfg.pretrained_dis_path))
+            self.dis.load_state_dict(torch.load(cfg.pretrained_dis_path, map_location='cuda:{}'.format(cfg.device)))
+
+        if cfg.CUDA:
+            self.gen = self.gen.cuda()
+            self.dis = self.dis.cuda()
 
     def _run(self):
         # # ===TRAIN DISCRIMINATOR====
