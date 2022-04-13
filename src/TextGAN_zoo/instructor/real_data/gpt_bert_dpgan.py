@@ -16,7 +16,7 @@ from models.DPGAN_D import DPGAN_D
 from models.GPT_2 import GPT_2
 from transformers import GPT2Model, GPT2Tokenizer
 
-from utils import helpers
+from utils import helpers, gpt2_data_loader
 from utils.data_loader import GenDataIter
 from utils.text_process import write_tokens
 
@@ -203,6 +203,6 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         save_sample_path = cfg.save_samples_root + 'samples_{}_{:05d}.txt'.format(phase, epoch)
         samples = self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
                                             batch_size=50, temperature=0.7, top_k=40)
-        samples = [self.tokenizer.decode(sample) for sample in samples]
+        samples = [[self.tokenizer.decode(sample)] for sample in samples]
         write_tokens(save_sample_path, samples)
 

@@ -22,17 +22,10 @@ class gpt2_data_loader(GenDataIter):
             max_length=cfg.max_seq_length,
         )
 
-    def load_data(self, dataset):
-        dataset_path = 'dataset/{}.txt'.format(dataset)
-        self.tokens = get_tokenlized(dataset_path)
-        dataset = datasets.load_dataset('text', data_files=dataset_path)
+    @staticmethod
+    def gpt2_tensor_to_token(tokenizer, tokens):
+        text = ''.join([tokenizer.decode(token) for token in tokens])
+        return text
 
-        tokenized_dataset = dataset.map(
-            self.tokenize_function,
-            batched=True,
-            remove_columns=["text"],
-        )
-
-        return self.prepare(tokenized_dataset)
 
 
