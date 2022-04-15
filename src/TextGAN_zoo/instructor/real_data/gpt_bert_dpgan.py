@@ -17,7 +17,7 @@ from models.BERT_sentiment import BERT_sentiment
 from models.GPT_2 import GPT_2
 from utils import helpers
 from utils.bp_encoder import get_encoder
-from utils.data_loader import GenDataIter
+from utils.gpt2_data_loader import GenDataIter
 from utils.text_process import write_tokens
 
 
@@ -43,6 +43,29 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         # Tokenizer for the pretrained gpt2
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
         self.bpe = get_encoder()
+
+        # load dictionary
+        self.log.info(f"Loading {cfg.dataset} dataset")
+        self.word2idx_dict, self.idx2word_dict = load_dict(cfg.dataset)
+
+        # Dataloader
+        try:
+            self.train_data = GenDataIter(cfg.train_data)
+            self.test_data = GenDataIter(cfg.test_data, if_test_data=True)
+        except:
+            pass
+
+        try:
+            self.train_data_list = [GenDataIter(cfg.cat_train_data.format(i)) for i in range(cfg.k_label)]
+            self.test_data_list = [GenDataIter(cfg.cat_test_data.format(i), if_test_data=True) for i in
+                                   range(cfg.k_label)]
+            self.clas_data_list = [GenDataIter(cfg.cat_test_data.format(str(i)), if_test_data=True) for i in
+                                   range(cfg.k_label)]
+
+            self.train_samples_list = [self.train_data_list[i].target for i in range(cfg.k_label)]
+            self.clas_samples_list = [self.clas_data_list[i].target for i in range(cfg.k_label)]
+        except:
+            pass
 
     def init_model(self):
         """

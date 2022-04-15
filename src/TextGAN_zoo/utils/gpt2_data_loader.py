@@ -51,9 +51,8 @@ class GenDataIter:
         self.shuffle = cfg.data_shuffle if not shuffle else shuffle
         with open('utils/encoder.json', 'r') as f:
             encoder = json.load(f)
-            decoder = {v: k for k, v in self.encoder.items()}
+            decoder = {v: k for k, v in encoder.items()}
         if cfg.if_real_data:
-
             self.word2idx_dict, self.idx2word_dict = encoder, decoder
         if if_test_data:  # used for the classifier
             self.word2idx_dict, self.idx2word_dict = encoder, decoder
