@@ -183,7 +183,8 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
                                                     sample_pos2=False)
             gen_data = GenDataIter(eval_samples)
             #gen_tokens = tensor_to_tokens(eval_samples, self.idx2word_dict)
-            gen_tokens = [self.tokenizer.decode(eval_sample) for eval_sample in eval_samples]
+            eval_samples = eval_samples.tolist()
+            gen_tokens = [[self.bpe.decode(eval_sample)] for eval_sample in eval_samples]
             # gen_tokens_s = tensor_to_tokens(self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
             #                                        batch_size=200, temperature=0.7, top_k=40), self.idx2word_dict)
 
