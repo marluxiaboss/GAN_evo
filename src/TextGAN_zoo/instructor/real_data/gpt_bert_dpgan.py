@@ -60,14 +60,6 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             self.dis = self.dis.cuda()
 
     def _run(self):
-        # # ===TRAIN DISCRIMINATOR====
-        if not cfg.dis_pretrain:
-            self.log.info('Starting Discriminator Training...')
-            self.train_discriminator(cfg.d_step, cfg.d_epoch, 'MLE')
-            if cfg.if_save and not cfg.if_test:
-                torch.save(self.dis.state_dict(), cfg.pretrained_dis_path)
-                print('Save pre-trained discriminator: {}'.format(cfg.pretrained_dis_path))
-
         # ===ADVERSARIAL TRAINING===
         self.log.info('Starting Adversarial Training...')
         self.log.info('Initial generator: %s' % (self.cal_metrics(fmt_str=True)))
@@ -77,7 +69,6 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             self.sig.update()
             if self.sig.adv_sig:
                 self.adv_train_generator(cfg.ADV_g_step)  # Generator
-                self.train_discriminator(cfg.ADV_d_step, cfg.ADV_d_epoch, 'ADV')  # Discriminator
 
                 if adv_epoch % cfg.adv_log_step == 0 or adv_epoch == cfg.ADV_train_epoch - 1:
                     if cfg.if_save and not cfg.if_test:
@@ -111,9 +102,12 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
                 inp = inp.cuda()
 
             gen_sample, gen_sample_log_prob = self.gen.sample_teacher_forcing(inp)
-            word_reward, sentence_reward = self.dis.getReward(gen_sample, pos_or_neg_sample = "NEG")
-            sentence_reward = sentence_reward.repeat(1, cfg.max_seq_len)
-            reward_matrix = sentence_reward * word_reward * dis_count_matrix
+            word_reward, sentence_reward = self.dis.getReward(gen_sample)
+            if word_reward is not None:
+                sentence_reward = sentence_reward.repeat(1, cfg.max_seq_len)
+                reward_matrix = sentence_reward * word_reward * dis_count_matrix
+            else:
+                reward_matrix = sentence_reward
             for i in range(cfg.max_seq_len):
                 reward_matrix[:, i] = reward_matrix[:, i:].sum(dim=-1)
 
@@ -126,49 +120,12 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         self.log.info(
             '[ADV-GEN]: g_loss = %.4f, %s' % (total_g_loss / (g_step * cfg.batch_size), self.cal_metrics(fmt_str=True)))
 
-    def train_discriminator(self, d_step, d_epoch, phase='MLE'):
-        """
-        Training the discriminator on real_data_samples (positive) and generated samples from gen (negative).
-        Samples are drawn d_step times, and the discriminator is trained for d_epoch d_epoch.
-        """
-        # prepare loader for validate
-        for step in range(d_step):
-            # prepare loader for training
-            pos_samples = self.train_data.target[:100,:]
-            neg_samples = self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
-                                                   batch_size=pos_samples.size(0), temperature=0.7, top_k=40)
-
-            pos_reward, neg_reward = 0, 0
-            for epoch in range(d_epoch):
-                # ===Train===
-                pos_reward, neg_reward = self.train_dis_epoch(self.dis, pos_samples, neg_samples, self.dis_opt)
-
-            # ===Test===
-            self.log.info('[%s-DIS] d_step %d: pos_reward = %.4f, neg_reward = %.4f,' % (
-                phase, step, pos_reward, neg_reward))
-
-            if cfg.if_save and not cfg.if_test:
-                torch.save(self.dis.state_dict(), cfg.pretrained_dis_path)
 
     def eval_dis(self, model, pos_val, neg_val):
-        _, pos_reward = model.getReward(pos_val, pos_or_neg_sample="POS")
-        _, neg_reward = model.getReward(neg_val, pos_or_neg_sample="NEG")
+        _, pos_reward = model.getReward(pos_val)
+        _, neg_reward = model.getReward(neg_val)
         return torch.mean(pos_reward), torch.mean(neg_reward)
 
-    def train_dis_epoch(self, model, pos_samples, neg_samples, optimizer):
-        pos_reward, neg_reward = 0, 0
-        num_samples = pos_samples.size(0)
-        num_batch = num_samples // cfg.batch_size
-        for i in range(num_batch):
-            pos_sample = pos_samples[i * cfg.batch_size: (i + 1) * cfg.batch_size]
-            neg_sample = neg_samples[i * cfg.batch_size: (i + 1) * cfg.batch_size]
-
-            _, pos_reward = model.getReward(pos_sample, pos_or_neg_sample="POS")
-            _, neg_reward = model.getReward(neg_sample, pos_or_neg_sample="NEG")
-
-            loss = -torch.mean(pos_reward) + torch.mean(neg_reward)
-            self.optimize(optimizer, loss, model)
-        return pos_reward.mean().item(), neg_reward.mean().item()
 
 
     def cal_metrics(self, fmt_str=False):
