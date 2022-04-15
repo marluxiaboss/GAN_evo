@@ -9,17 +9,16 @@
 
 import torch
 import torch.optim as optim
-
-import config as cfg
-from instructor.real_data.instructor import BasicInstructor, SelfAttentionInstructor
-from models.DPGAN_D import DPGAN_D
-from models.GPT_2 import GPT_2
 from transformers import GPT2Model, GPT2Tokenizer
 
-from utils import helpers, gpt2_data_loader
+import config as cfg
+from instructor.real_data.instructor import SelfAttentionInstructor
+from models.BERT_sentiment import BERT_sentiment
+from models.GPT_2 import GPT_2
+from utils import helpers
+from utils.bp_encoder import get_encoder
 from utils.data_loader import GenDataIter
 from utils.text_process import write_tokens
-from utils.bp_encoder import get_encoder
 
 
 class GPT_BERT_DPGAN(SelfAttentionInstructor):
@@ -28,8 +27,8 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
 
         # generator, discriminator
         self.gen = GPT_2()
-        self.dis = DPGAN_D(cfg.gen_embed_dim, cfg.gen_hidden_dim, self.gen.config.vocab_size, cfg.max_seq_len,
-                           cfg.padding_idx, gpu=cfg.CUDA)
+        self.dis = BERT_sentiment(cfg.gen_embed_dim, cfg.gen_hidden_dim, cfg.vocab_size, cfg.max_seq_len,
+                                  cfg.padding_idx, gpu=cfg.CUDA)
         self.init_model()
 
         # Optimizer
@@ -45,16 +44,10 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
         self.bpe = get_encoder()
 
-
     def init_model(self):
         """
         Overwrites the init_model() in instructor.py
         """
-        if cfg.dis_pretrain:
-            self.log.info(
-                'Load pre-trained discriminator: {}'.format(cfg.pretrained_dis_path))
-            self.dis.load_state_dict(torch.load(cfg.pretrained_dis_path, map_location='cuda:{}'.format(cfg.device)))
-
         if cfg.CUDA:
             self.gen = self.gen.cuda()
             self.dis = self.dis.cuda()
@@ -82,7 +75,6 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
 
         self._run()
         pass
-
 
     def adv_train_generator(self, g_step):
         """
@@ -120,13 +112,10 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         self.log.info(
             '[ADV-GEN]: g_loss = %.4f, %s' % (total_g_loss / (g_step * cfg.batch_size), self.cal_metrics(fmt_str=True)))
 
-
     def eval_dis(self, model, pos_val, neg_val):
         _, pos_reward = model.getReward(pos_val)
         _, neg_reward = model.getReward(neg_val)
         return torch.mean(pos_reward), torch.mean(neg_reward)
-
-
 
     def cal_metrics(self, fmt_str=False):
         """
@@ -139,7 +128,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
                                                     batch_size=cfg.samples_num, temperature=0.7, top_k=40,
                                                     sample_pos2=False)
             gen_data = GenDataIter(eval_samples)
-            #gen_tokens = tensor_to_tokens(eval_samples, self.idx2word_dict)
+            # gen_tokens = tensor_to_tokens(eval_samples, self.idx2word_dict)
             eval_samples = eval_samples.tolist()
             gen_tokens = [[self.bpe.decode(eval_sample)] for eval_sample in eval_samples]
             # gen_tokens_s = tensor_to_tokens(self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
@@ -163,9 +152,8 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             torch.save(self.gen.state_dict(), cfg.save_model_root + 'gen_{}_{:05d}.pt'.format(phase, epoch))
         save_sample_path = cfg.save_samples_root + 'samples_{}_{:05d}.txt'.format(phase, epoch)
         samples = self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
-                                            batch_size=50, temperature=0.7, top_k=40)
+                                           batch_size=50, temperature=0.7, top_k=40)
         samples = samples.tolist()
-        #samples = [[self.tokenizer.decode(sample)] for sample in samples]
+        # samples = [[self.tokenizer.decode(sample)] for sample in samples]
         samples = [[self.bpe.decode(sample)] for sample in samples]
         write_tokens(save_sample_path, samples)
-

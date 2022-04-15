@@ -17,9 +17,9 @@ from utils.data_loader import GenDataIter
 from transformers import pipeline
 
 
-class DPGAN_D(LSTMGenerator):
+class BERT_sentiment(LSTMGenerator):
     def __init__(self, embedding_dim, hidden_dim, vocab_size, max_seq_len, padding_idx, gpu=False):
-        super(DPGAN_D, self).__init__(embedding_dim, hidden_dim, vocab_size, max_seq_len, padding_idx, gpu)
+        super(BERT_sentiment, self).__init__(embedding_dim, hidden_dim, vocab_size, max_seq_len, padding_idx, gpu)
         self.name = 'dpgan_d'
         self.sentiment = pipeline(task='sentiment-analysis',
                                   model='nlptown/bert-base-multilingual-uncased-sentiment',
