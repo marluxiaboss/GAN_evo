@@ -4,6 +4,7 @@ from transformers import GPT2Tokenizer
 
 import config as cfg
 from models.generator import TransformerGenerator
+from utils.bp_encoder import get_encoder
 
 
 class GPT_2(TransformerGenerator):
@@ -34,8 +35,17 @@ class GPT_2(TransformerGenerator):
             samples: batch_size * seq_len
             log_prob: batch_size * seq_len  (log probabilities)
         """
-        batch_size, _ = inp.size()
 
+        # The problem is that the token of inp are those from image_coco
+        # so I need to translate image_coco token to gpt2_tokenizer token
+        # using the gpt2_tokenizer dict.
+
+        batch_size, _ = inp.size()
+        print("INP")
+        bpe = get_encoder()
+        samples = inp.tolist()
+        samples = [[bpe.decode(sample)] for sample in samples]
+        print(samples)
         logits, past = self(inp)
         pred = F.softmax(logits, dim=-1)
         samples = self.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,

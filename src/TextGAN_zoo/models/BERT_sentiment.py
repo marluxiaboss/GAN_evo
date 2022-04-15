@@ -39,5 +39,9 @@ class BERT_sentiment(LSTMGenerator):
         samples = samples.tolist()
         samples = [[self.bpe.decode(sample)] for sample in samples]
         sentence_reward = self.sentiment(samples)
+        print("SAMPLES")
+        print(samples)
+        print("SENTENCE_reward")
+        print(sentence_reward)
 
         return word_reward, sentence_reward
