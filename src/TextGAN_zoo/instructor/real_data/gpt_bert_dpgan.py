@@ -120,13 +120,6 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             inp = self.train_data.random_batch()['input']
             if cfg.CUDA:
                 inp = inp.cuda()
-            # The inp is generated with the dataset specific encoder
-            # if we want to use the specif gpt2 encoder, we need to decoder and
-            # re-encode back using the right encoder
-            inp = tensor_to_tokens(inp, self.idx2word_dict_old)
-            inp = tokens_to_tensor(inp, self.word2idx_dict)
-
-
             gen_sample, gen_sample_log_prob = self.gen.sample_teacher_forcing(inp)
             word_reward, sentence_reward = self.dis.getReward(gen_sample)
             if word_reward is not None:

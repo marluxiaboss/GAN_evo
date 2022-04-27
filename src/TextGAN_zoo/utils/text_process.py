@@ -29,7 +29,7 @@ def get_raw_text(file):
     raw_text = list()
     with open(file) as raw:
         for text in raw:
-            raw_text.append(text.lower())
+            raw_text.append(text)
     return raw_text
 
 

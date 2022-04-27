@@ -32,6 +32,7 @@ class gpt2_data_loader(Dataset):
         text = ''.join([tokenizer.decode(token) for token in tokens])
         return text
 
+
 class GANDataset(Dataset):
     def __init__(self, data):
         self.data = data
@@ -63,7 +64,6 @@ class GenDataIter:
             batch_size=self.batch_size,
             shuffle=self.shuffle,
             drop_last=True)
-
         self.input = self._all_data_('input')
         self.target = self._all_data_('target')
 
@@ -85,6 +85,8 @@ class GenDataIter:
     def random_batch(self):
         """Randomly choose a batch from loader, please note that the data should not be shuffled."""
         idx = random.randint(0, len(self.loader) - 1)
+        print("----------------------------HERE5--------------------------------------------------")
+        print(list(self.loader)[idx])
         return list(self.loader)[idx]
 
     def _all_data_(self, col):
@@ -95,8 +97,8 @@ class GenDataIter:
         """Add start_letter to samples as inp, target same as samples"""
         inp = torch.zeros(samples.size()).long()
         target = samples
-        inp[:, 0] = cfg.start_letter
-        inp[:, 1:] = target[:, :cfg.max_seq_len - 1]
+        #inp[:, 0] = cfg.start_letter
+        inp[:, :] = target[:, :cfg.max_seq_len]
 
         #print(f"dataloader inp: {inp[0][:]}")
         #print(f"dataloader target: {target[0][:]}")
@@ -108,9 +110,10 @@ class GenDataIter:
     def load_data(self, filename):
         """Load real data from local file"""
         self.tokens = get_tokenlized(filename)
-        text = get_raw_text(filename)
-        #samples_index = tokens_to_tensor(self.tokens, self.word2idx_dict)
-        samples_index = self.bpe.decode(text)
+        texts = get_raw_text(filename)
+        # samples_index = tokens_to_tensor(self.tokens, self.word2idx_dict)
+        samples_index = [self.bpe.encode(text) for text in texts]
+        samples_index = torch.LongTensor(samples_index)
         return self.prepare(samples_index)
 
 
@@ -153,5 +156,3 @@ class DisDataIter:
         if gpu:
             return inp.cuda(), target.cuda()
         return inp, target
-
-

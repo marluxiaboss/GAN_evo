@@ -4,6 +4,7 @@ import os
 import json
 import regex as re
 from functools import lru_cache
+import config as cfg
 
 @lru_cache()
 def bytes_to_unicode():
@@ -94,10 +95,14 @@ class Encoder:
 
     def encode(self, text):
         bpe_tokens = []
+        #for token in re.findall(self.pat, text):
         for token in re.findall(self.pat, text):
-            token = ''.join(self.byte_encoder[b] for b in token.encode('utf-8'))
-            bpe_tokens.extend(self.encoder[bpe_token] for bpe_token in self.bpe(token).split(' '))
-        return bpe_tokens
+            if token != '\n':
+                token = ''.join(self.byte_encoder[b] for b in token.encode('utf-8'))
+                bpe_tokens.extend(self.encoder[bpe_token] for bpe_token in self.bpe(token).split(' '))
+        while len(bpe_tokens) < cfg.max_seq_len:
+            bpe_tokens.append(self.encoder['<|endoftext|>'])
+        return bpe_tokens[:cfg.max_seq_len]
 
     def decode(self, tokens):
         text = ''.join([self.decoder[token] for token in tokens])
