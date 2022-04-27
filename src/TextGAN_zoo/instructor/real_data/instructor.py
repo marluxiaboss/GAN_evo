@@ -17,7 +17,7 @@ from metrics.clas_acc import ACC
 from metrics.nll import NLL
 from metrics.ppl import PPL
 from utils.cat_data_loader import CatClasDataIter
-from utils.data_loader import GenDataIter
+from utils.gpt2_data_loader import GenDataIter
 from utils.helpers import Signal, create_logger, get_fixed_temperature
 from utils.text_process import load_dict, write_tokens, tensor_to_tokens
 
@@ -33,7 +33,6 @@ class BasicInstructor:
 
         self.clas = None
 
-        print("I'm here")
 
         # load dictionary
         self.word2idx_dict, self.idx2word_dict = load_dict(cfg.dataset)

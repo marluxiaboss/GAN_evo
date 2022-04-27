@@ -6,12 +6,12 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 from transformers import GPT2Tokenizer
 import config as cfg
+from utils.bp_encoder import get_encoder
 
-from utils.data_loader import GenDataIter
-from utils.text_process import get_tokenlized, tokens_to_tensor, load_dict, load_test_dict
+from utils.text_process import get_tokenlized, tokens_to_tensor, load_dict, load_test_dict, get_raw_text
 
 
-class gpt2_data_loader(GenDataIter):
+class gpt2_data_loader(Dataset):
     def __init__(self):
         self.tokens = None
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
@@ -45,6 +45,7 @@ class GANDataset(Dataset):
 
 class GenDataIter:
     def __init__(self, samples, if_test_data=False, shuffle=None):
+        self.bpe = get_encoder()
         self.batch_size = cfg.batch_size
         self.max_seq_len = cfg.max_seq_len
         self.start_letter = cfg.start_letter
@@ -107,7 +108,9 @@ class GenDataIter:
     def load_data(self, filename):
         """Load real data from local file"""
         self.tokens = get_tokenlized(filename)
-        samples_index = tokens_to_tensor(self.tokens, self.word2idx_dict)
+        text = get_raw_text(filename)
+        #samples_index = tokens_to_tensor(self.tokens, self.word2idx_dict)
+        samples_index = self.bpe.decode(text)
         return self.prepare(samples_index)
 
 

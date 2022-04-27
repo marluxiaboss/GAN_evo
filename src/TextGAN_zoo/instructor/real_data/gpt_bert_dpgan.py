@@ -6,6 +6,7 @@
 # @Blog         : http://zhiweil.ml/
 # @Description  :
 # Copyrights (C) 2018. All Rights Reserved.
+import json
 
 import torch
 import torch.optim as optim
@@ -18,7 +19,7 @@ from models.GPT_2 import GPT_2
 from utils import helpers
 from utils.bp_encoder import get_encoder
 from utils.gpt2_data_loader import GenDataIter
-from utils.text_process import write_tokens
+from utils.text_process import write_tokens, load_dict, tensor_to_tokens, tokens_to_tensor
 
 
 class GPT_BERT_DPGAN(SelfAttentionInstructor):
@@ -46,7 +47,10 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
 
         # load dictionary
         self.log.info(f"Loading {cfg.dataset} dataset")
-        self.word2idx_dict, self.idx2word_dict = load_dict(cfg.dataset)
+        with open('utils/encoder.json', 'r') as f:
+            encoder = json.load(f)
+            decoder = {v: k for k, v in encoder.items()}
+            self.word2idx_dict, self.idx2word_dict = encoder, decoder
 
         # Dataloader
         try:
@@ -66,6 +70,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             self.clas_samples_list = [self.clas_data_list[i].target for i in range(cfg.k_label)]
         except:
             pass
+        self.word2idx_dict_old, self.idx2word_dict_old = load_dict(cfg.dataset)
 
     def init_model(self):
         """
@@ -115,6 +120,12 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             inp = self.train_data.random_batch()['input']
             if cfg.CUDA:
                 inp = inp.cuda()
+            # The inp is generated with the dataset specific encoder
+            # if we want to use the specif gpt2 encoder, we need to decoder and
+            # re-encode back using the right encoder
+            inp = tensor_to_tokens(inp, self.idx2word_dict_old)
+            inp = tokens_to_tensor(inp, self.word2idx_dict)
+
 
             gen_sample, gen_sample_log_prob = self.gen.sample_teacher_forcing(inp)
             word_reward, sentence_reward = self.dis.getReward(gen_sample)

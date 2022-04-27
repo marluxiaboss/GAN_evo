@@ -24,6 +24,14 @@ def get_tokenlized(file):
             tokenlized.append(text)
     return tokenlized
 
+def get_raw_text(file):
+    """outputs raw text instead of tokenized version output by get_tokenlized"""
+    raw_text = list()
+    with open(file) as raw:
+        for text in raw:
+            raw_text.append(text.lower())
+    return raw_text
+
 
 def get_word_list(tokens):
     """get word set"""
@@ -149,6 +157,15 @@ def tokens_to_tensor(tokens, dictionary):
             i += 1
         tensor.append(sent_ten[:cfg.max_seq_len])
     return torch.LongTensor(tensor)
+
+def base_tokens_to_gpt2_tokens(tokens, gpt2_tokenizer, gpt2_dict):
+    new_tokens = []
+    for token in tokens:
+        #handle special tokens
+        if token == 'BOS':
+            news_tokens.add(gpt2_tokenizer.bos_token)
+
+
 
 
 def padding_token(tokens):
@@ -343,6 +360,8 @@ def build_embedding_matrix(dataset):
         embedding_matrix = torch.FloatTensor(embedding_matrix)
         torch.save(embedding_matrix, embed_filename)
     return embedding_matrix
+
+
 
 
 if __name__ == '__main__':

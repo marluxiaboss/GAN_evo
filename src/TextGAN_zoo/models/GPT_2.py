@@ -39,7 +39,6 @@ class GPT_2(TransformerGenerator):
         # The problem is that the token of inp are those from image_coco
         # so I need to translate image_coco token to gpt2_tokenizer token
         # using the gpt2_tokenizer dict.
-
         batch_size, _ = inp.size()
         print("INP")
         bpe = get_encoder()

@@ -221,3 +221,4 @@ def load_weight(model, state_dict):
     # Make sure we are still sharing the output and input embeddings after loading weights
     model.set_tied()
     return model
+
