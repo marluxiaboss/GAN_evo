@@ -19,7 +19,6 @@ class GPT_2(TransformerGenerator):
                                      initializer_range=0.02)
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
         super(GPT_2, self).__init__(self.config)
-
     """
     def sample_sequence(self, length, start_token=None, batch_size=None, context=None, temperature=1, top_k=0,
                         device='cuda', sample=True, sample_pos2=False):
@@ -35,24 +34,25 @@ class GPT_2(TransformerGenerator):
             samples: batch_size * seq_len
             log_prob: batch_size * seq_len  (log probabilities)
         """
-
-        # The problem is that the token of inp are those from image_coco
-        # so I need to translate image_coco token to gpt2_tokenizer token
-        # using the gpt2_tokenizer dict.
         batch_size, _ = inp.size()
         print("INP")
         bpe = get_encoder()
         samples = inp.tolist()
         samples = [[bpe.decode(sample)] for sample in samples]
         print(samples)
-        logits, past = self(inp)
-        pred = F.softmax(logits, dim=-1)
-        samples = self.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
-                                       batch_size=batch_size, temperature=0.7,
-                                       top_k=1, sample=False)
-        log_prob = F.nll_loss(pred.view(-1, self.config.vocab_size), samples.view(-1),
-                              reduction='none').view(batch_size, -1)
 
+        samples = torch.zeros(batch_size, cfg.max_seq_len).long()
+        for i in range(batch_size):
+            samples[i, :] = self.sample_sequence(cfg.max_seq_len - 1, context=inp[i], start_token=None,
+                                                     batch_size=-1, temperature=0.7,
+                                                     top_k=40, sample=False)
+
+        print("OUT")
+        bpe = get_encoder()
+        samples = samples.tolist()
+        samples = [[bpe.decode(sample)] for sample in samples]
+        print(samples)
+        log_prob = -1
         return samples, log_prob
 
     def sample_sequence(self, length, start_token=None, batch_size=None, context=None, temperature=1, top_k=0,

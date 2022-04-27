@@ -85,8 +85,6 @@ class GenDataIter:
     def random_batch(self):
         """Randomly choose a batch from loader, please note that the data should not be shuffled."""
         idx = random.randint(0, len(self.loader) - 1)
-        print("----------------------------HERE5--------------------------------------------------")
-        print(list(self.loader)[idx])
         return list(self.loader)[idx]
 
     def _all_data_(self, col):
