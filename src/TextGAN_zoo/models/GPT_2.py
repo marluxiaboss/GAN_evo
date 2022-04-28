@@ -5,6 +5,7 @@ from transformers import GPT2Tokenizer
 import config as cfg
 from models.generator import TransformerGenerator
 from utils.bp_encoder import get_encoder
+from utils.text_process import cut_eot_token
 
 
 class GPT_2(TransformerGenerator):
@@ -35,16 +36,24 @@ class GPT_2(TransformerGenerator):
             log_prob: batch_size * seq_len  (log probabilities)
         """
         batch_size, _ = inp.size()
+        print("INP")
+        bpe = get_encoder()
+        samples = inp.tolist()
+        samples = [[bpe.decode(sample)] for sample in samples]
+        print(samples)
         samples = torch.zeros(batch_size, cfg.max_seq_len - 1).long()
 
+
         for i in range(batch_size):
-            sampled = self.sample_sequence(cfg.max_seq_len - 1, context=inp[i], start_token=None,
+            context = inp[i]
+            out = cut_eot_token(context)
+            if out is not None:
+                context = out
+            sampled = self.sample_sequence(cfg.max_seq_len - 1, context=context, start_token=None,
                                                      batch_size=1, temperature=0.7,
                                                      top_k=40)
-            sampled = sampled[:, len(inp[i]):]
+            sampled = sampled[:, len(context):]
             samples[i, :] = sampled.view(len(sampled[0]))
-
-
         print("OUT")
         bpe = get_encoder()
         samples = samples.tolist()

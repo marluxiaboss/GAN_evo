@@ -15,6 +15,19 @@ import torch
 import config as cfg
 
 
+def cut_eot_token(tensor):
+    out = None
+    first_eot_index = None
+    j = 0
+    while j < len(tensor) and first_eot_index is None:
+        if tensor[j] == 50256:
+            first_eot_index = j
+        j += 1
+    if first_eot_index is not None:
+        out = tensor[:first_eot_index]
+    return out
+
+
 def get_tokenlized(file):
     """tokenlize the file"""
     tokenlized = list()
@@ -23,6 +36,7 @@ def get_tokenlized(file):
             text = nltk.word_tokenize(text.lower())
             tokenlized.append(text)
     return tokenlized
+
 
 def get_raw_text(file):
     """outputs raw text instead of tokenized version output by get_tokenlized"""
@@ -158,14 +172,13 @@ def tokens_to_tensor(tokens, dictionary):
         tensor.append(sent_ten[:cfg.max_seq_len])
     return torch.LongTensor(tensor)
 
+
 def base_tokens_to_gpt2_tokens(tokens, gpt2_tokenizer, gpt2_dict):
     new_tokens = []
     for token in tokens:
-        #handle special tokens
+        # handle special tokens
         if token == 'BOS':
             news_tokens.add(gpt2_tokenizer.bos_token)
-
-
 
 
 def padding_token(tokens):
@@ -360,8 +373,6 @@ def build_embedding_matrix(dataset):
         embedding_matrix = torch.FloatTensor(embedding_matrix)
         torch.save(embedding_matrix, embed_filename)
     return embedding_matrix
-
-
 
 
 if __name__ == '__main__':
