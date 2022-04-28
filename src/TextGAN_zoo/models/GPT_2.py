@@ -35,17 +35,15 @@ class GPT_2(TransformerGenerator):
             log_prob: batch_size * seq_len  (log probabilities)
         """
         batch_size, _ = inp.size()
-        print("INP")
-        bpe = get_encoder()
-        samples = inp.tolist()
-        samples = [[bpe.decode(sample)] for sample in samples]
-        print(samples)
+        samples = torch.zeros(batch_size, cfg.max_seq_len - 1).long()
 
-        samples = torch.zeros(batch_size, cfg.max_seq_len).long()
         for i in range(batch_size):
-            samples[i, :] = self.sample_sequence(cfg.max_seq_len - 1, context=inp[i], start_token=None,
-                                                     batch_size=-1, temperature=0.7,
-                                                     top_k=40, sample=False)
+            sampled = self.sample_sequence(cfg.max_seq_len - 1, context=inp[i], start_token=None,
+                                                     batch_size=1, temperature=0.7,
+                                                     top_k=40)
+            sampled = sampled[:, len(inp[i]):]
+            samples[i, :] = sampled.view(len(sampled[0]))
+
 
         print("OUT")
         bpe = get_encoder()
