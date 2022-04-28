@@ -6,6 +6,7 @@
 # @Blog         : http://zhiweil.ml/
 # @Description  :
 # Copyrights (C) 2018. All Rights Reserved.
+
 import json
 
 import torch
@@ -120,7 +121,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             inp = self.train_data.random_batch()['input']
             if cfg.CUDA:
                 inp = inp.cuda()
-            gen_sample = self.gen.sample_teacher_forcing(inp)
+            gen_sample, gen_sample_log_prob = self.gen.sample_teacher_forcing(inp)
             word_reward, sentence_reward = self.dis.getReward(gen_sample)
             if word_reward is not None:
                 sentence_reward = sentence_reward.repeat(1, cfg.max_seq_len)
@@ -130,7 +131,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             for i in range(cfg.max_seq_len):
                 reward_matrix[:, i] = reward_matrix[:, i:].sum(dim=-1)
 
-            adv_loss = torch.sum(reward_matrix)
+            adv_loss = torch.sum(gen_sample_log_prob * reward_matrix)
 
             self.optimize(self.gen_adv_opt, adv_loss, self.gen)
             total_g_loss += adv_loss.item()

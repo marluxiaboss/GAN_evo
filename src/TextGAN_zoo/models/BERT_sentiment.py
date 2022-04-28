@@ -38,10 +38,16 @@ class BERT_sentiment(LSTMGenerator):
         word_reward = None
         samples = samples.tolist()
         samples = [[self.bpe.decode(sample)] for sample in samples]
-        sentence_reward = self.sentiment(samples)
+        sentiments = self.sentiment(samples)
+
         print("SAMPLES")
         print(samples)
         print("SENTENCE_reward")
-        print(sentence_reward)
-
-        return word_reward, sentence_reward
+        print(sentiments)
+        reward_map = {'1 star' : 0, '2 stars': 1, '3 stars': 5, '4 stars': 20,
+                      '5 stars': 50}
+        sentence_rewards = torch.LongTensor([reward_map[sentiment['label']] for sentiment in sentiments])
+        sentence_rewards = sentence_rewards.view(1, len(sentence_rewards))
+        print("SENTENCE_REWARDS")
+        print(sentence_rewards)
+        return word_reward, sentence_rewards

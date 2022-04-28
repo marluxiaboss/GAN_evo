@@ -36,11 +36,6 @@ class GPT_2(TransformerGenerator):
             log_prob: batch_size * seq_len  (log probabilities)
         """
         batch_size, _ = inp.size()
-        print("INP")
-        bpe = get_encoder()
-        samples = inp.tolist()
-        samples = [[bpe.decode(sample)] for sample in samples]
-        print(samples)
         samples = torch.zeros(batch_size, cfg.max_seq_len - 1).long()
 
 
@@ -54,11 +49,6 @@ class GPT_2(TransformerGenerator):
                                                      top_k=40)
             sampled = sampled[:, len(context):]
             samples[i, :] = sampled.view(len(sampled[0]))
-        print("OUT")
-        bpe = get_encoder()
-        samples = samples.tolist()
-        samples = [[bpe.decode(sample)] for sample in samples]
-        print(samples)
         log_prob = -1
         return samples, log_prob
 
