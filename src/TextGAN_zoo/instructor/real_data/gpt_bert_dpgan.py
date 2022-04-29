@@ -123,8 +123,9 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
                 inp = inp.cuda()
             gen_sample, gen_sample_log_prob = self.gen.sample_teacher_forcing(inp)
             word_reward, sentence_reward = self.dis.getReward(gen_sample)
+            sentence_reward = sentence_reward.repeat(1, cfg.max_seq_len)
+
             if word_reward is not None:
-                sentence_reward = sentence_reward.repeat(1, cfg.max_seq_len)
                 reward_matrix = sentence_reward * word_reward * dis_count_matrix
             else:
                 reward_matrix = sentence_reward
