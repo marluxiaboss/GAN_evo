@@ -36,7 +36,7 @@ class GPT_2(TransformerGenerator):
             log_prob: batch_size * seq_len  (log probabilities)
         """
         batch_size, _ = inp.size()
-        samples = torch.zeros(batch_size, cfg.max_seq_len - 1).long()
+        samples = torch.zeros(batch_size, cfg.max_seq_len - 1)
 
 
         for i in range(batch_size):

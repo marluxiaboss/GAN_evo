@@ -132,7 +132,8 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             for i in range(cfg.max_seq_len):
                 reward_matrix[:, i] = reward_matrix[:, i:].sum(dim=-1)
 
-            adv_loss = torch.sum(gen_sample_log_prob * reward_matrix)
+            reward_matrix = reward_matrix.float().requires_grad_()
+            adv_loss = torch.sum(reward_matrix).float()
 
             self.optimize(self.gen_adv_opt, adv_loss, self.gen)
             total_g_loss += adv_loss.item()
