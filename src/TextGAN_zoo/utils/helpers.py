@@ -194,6 +194,8 @@ def load_weight(model, state_dict):
             new_keys.append(new_key)
     for old_key, new_key in zip(old_keys, new_keys):
         state_dict[new_key] = state_dict.pop(old_key)
+        state_dict[new_key].requires_grad_()
+
 
     missing_keys = []
     unexpected_keys = []

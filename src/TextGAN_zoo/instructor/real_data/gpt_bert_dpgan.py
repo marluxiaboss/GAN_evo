@@ -33,14 +33,14 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
                                   cfg.padding_idx, gpu=cfg.CUDA)
         self.init_model()
 
+        # Load weights from huggingface GPT_2 transformer class
+        pretrained_model = GPT2Model.from_pretrained("gpt2")
+        self.gen = helpers.load_weight(self.gen, pretrained_model.state_dict())
+
         # Optimizer
         self.gen_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
         self.gen_adv_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
         self.dis_opt = optim.Adam(self.dis.parameters(), lr=cfg.dis_lr)
-
-        # Load weights from huggingface GPT_2 transformer class
-        pretrained_model = GPT2Model.from_pretrained("gpt2")
-        self.gen = helpers.load_weight(self.gen, pretrained_model.state_dict())
 
         # Tokenizer for the pretrained gpt2
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
@@ -132,8 +132,8 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             for i in range(cfg.max_seq_len):
                 reward_matrix[:, i] = reward_matrix[:, i:].sum(dim=-1)
 
-            reward_matrix = reward_matrix.float().requires_grad_()
-            adv_loss = torch.sum(reward_matrix).float()
+            #reward_matrix = reward_matrix.float().requires_grad_()
+            adv_loss = torch.sum(reward_matrix)
 
             self.optimize(self.gen_adv_opt, adv_loss, self.gen)
             total_g_loss += adv_loss.item()

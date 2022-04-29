@@ -48,6 +48,4 @@ class BERT_sentiment(LSTMGenerator):
                       '5 stars': 50}
         sentence_rewards = torch.LongTensor([reward_map[sentiment['label']] for sentiment in sentiments])
         sentence_rewards = sentence_rewards.view(1, len(sentence_rewards))
-        print("SENTENCE_REWARDS")
-        print(sentence_rewards)
         return word_reward, sentence_rewards
