@@ -60,6 +60,8 @@ class GPT_2(TransformerGenerator):
         if start_token is None:
             assert context is not None, 'Specify exactly one of start_token and context!'
             context = torch.tensor(context, dtype=torch.long).unsqueeze(0).repeat(batch_size, 1)
+            # Tentative to solve grad issue
+            #context = context.clone().detach().requires_grad_(True)
             #device...
         else:
             assert context is None, 'Specify exactly one of start_token and context!'

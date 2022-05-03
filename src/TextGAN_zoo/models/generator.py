@@ -303,6 +303,7 @@ class GPT2LMHead(nn.Module):
     def set_embeddings_weights(self, model_embeddings_weights):
         embed_shape = model_embeddings_weights.shape
         self.decoder = nn.Linear(embed_shape[1], embed_shape[0], bias=False)
+
         self.decoder.weight = model_embeddings_weights  # Tied weights
 
     def forward(self, hidden_state):

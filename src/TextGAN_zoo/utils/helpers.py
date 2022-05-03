@@ -193,15 +193,18 @@ def load_weight(model, state_dict):
             old_keys.append(key)
             new_keys.append(new_key)
     for old_key, new_key in zip(old_keys, new_keys):
-        state_dict[new_key] = state_dict.pop(old_key)
-        state_dict[new_key].requires_grad_()
-
+        state_dict[new_key] = state_dict.pop(old_key).requires_grad_()
+        state_dict[new_key] = state_dict[new_key].requires_grad_(True)
 
     missing_keys = []
     unexpected_keys = []
     error_msgs = []
     # copy state_dict so _load_from_state_dict can modify it
     metadata = getattr(state_dict, "_metadata", None)
+    # Add grad requirement to all weights
+    for value in state_dict.values():
+        if value.dtype == torch.float32:
+            value.requires_grad_()
     state_dict = state_dict.copy()
     if metadata is not None:
         state_dict._metadata = metadata
