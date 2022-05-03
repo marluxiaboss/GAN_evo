@@ -36,7 +36,8 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         # Load weights from huggingface GPT_2 transformer class
         pretrained_model = GPT2Model.from_pretrained("gpt2")
         self.gen = helpers.load_weight(self.gen, pretrained_model.state_dict())
-
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.gen.to(device)
         # Optimizer
         self.gen_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
         self.gen_adv_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
