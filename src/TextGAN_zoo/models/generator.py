@@ -122,6 +122,7 @@ class LSTMGenerator(nn.Module):
     GPT2 Pytorch Model : https://github.com/huggingface/pytorch-pretrained-BERT
 '''
 
+
 def gelu(x):
     return 0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
 
@@ -267,8 +268,8 @@ class GPT2Model(nn.Module):
         else:
             past_length = past[0][0].size(-2)
         if position_ids is None:
-            position_ids = torch.arange(past_length, input_ids.size(-1) + past_length, dtype=torch.long)
-            #device=input_ids.device)
+            position_ids = torch.arange(past_length, input_ids.size(-1) + past_length, dtype=torch.long,
+                                        device=input_ids.device)
             position_ids = position_ids.unsqueeze(0).expand_as(input_ids)
 
         input_shape = input_ids.size()
@@ -343,16 +344,17 @@ class TransformerGenerator(nn.Module):
         logits = logits.transpose(0, 1)
         values = torch.where(logits < min_values, torch.ones_like(logits, dtype=logits.dtype) * -1e10, logits)
         return values.transpose(0, 1)
+
     def sample_sequence(self, length, start_token=None, batch_size=None, context=None, temperature=1, top_k=0,
                         device='cuda', sample=True, sample_pos2=False):
         if start_token is None:
             assert context is not None, 'Specify exactly one of start_token and context!'
             context = torch.tensor(context, dtype=torch.long).unsqueeze(0).repeat(batch_size, 1)
-            #device...
+            # device...
         else:
             assert context is None, 'Specify exactly one of start_token and context!'
             context = torch.full((batch_size, 1), start_token, dtype=torch.long)
-            #device =...
+            # device =...
         prev = context
         output = context
         past = None
@@ -387,5 +389,3 @@ class TransformerGenerator(nn.Module):
             output[i] = self.sample_sequence(length, start_token=start_token, batch_size=batch_size, context=context,
                                              temperature=temperature, top_k=top_k, device=device, sample=sample)
         return output"""
-
-
