@@ -44,13 +44,13 @@ class GPT_2(TransformerGenerator):
             out = cut_eot_token(context)
             if out is not None:
                 context = out
-            sampled = self.sample_sequence(cfg.max_seq_len - 1, context=context, start_token=None,
-                                                     batch_size=1, temperature=0.7,
-                                                     top_k=40)
+            sampled, log_probs = self.sample_sequence(cfg.max_seq_len - 1, context=context, start_token=None,
+                                                      batch_size=1, temperature=0.7,
+                                                      top_k=40)
             sampled = sampled[:, len(context):]
             samples[i, :] = sampled.view(len(sampled[0]))
-        log_prob = -1
-        return samples, log_prob
+
+        return samples, log_probs
 
     def sample_sequence(self, length, start_token=None, batch_size=None, context=None, temperature=1, top_k=0,
                         device='cuda', sample=True, sample_pos2=False):
@@ -91,4 +91,4 @@ class GPT_2(TransformerGenerator):
                 else:
                     _, prev = torch.topk(log_probs, k=1, dim=-1)
                 output = torch.cat((output, prev), dim=1)
-        return output
+        return output, torch.sum(log_probs)
