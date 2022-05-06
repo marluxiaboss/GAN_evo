@@ -21,6 +21,11 @@ from utils import helpers
 from utils.bp_encoder import get_encoder
 from utils.gpt2_data_loader import GenDataIter
 from utils.text_process import write_tokens, load_dict, tensor_to_tokens, tokens_to_tensor
+from torchvision import models
+from torchsummary import summary
+from torch import nn
+
+import visual.training_plots
 
 
 class GPT_BERT_DPGAN(SelfAttentionInstructor):
@@ -31,17 +36,22 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         self.gen = GPT_2()
         self.dis = BERT_sentiment(cfg.gen_embed_dim, cfg.gen_hidden_dim, cfg.vocab_size, cfg.max_seq_len,
                                   cfg.padding_idx, gpu=cfg.CUDA)
-        self.init_model()
+
 
         # Load weights from huggingface GPT_2 transformer class
         pretrained_model = GPT2Model.from_pretrained("gpt2")
+        pretrained_model.cuda()
+        #summary(pretrained_model, (1,14))
         self.gen = helpers.load_weight(self.gen, pretrained_model.state_dict())
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.gen.to(device)
+        counter = 0
+        self.init_model()
+
         # Optimizer
         self.gen_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
         self.gen_adv_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
-        self.dis_opt = optim.Adam(self.dis.parameters(), lr=cfg.dis_lr)
+        self.dis_opt = optim.Adam(self.dis.parameters(), lr=cfg.gen_lr)
 
         # Tokenizer for the pretrained gpt2
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
@@ -53,6 +63,9 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             encoder = json.load(f)
             decoder = {v: k for k, v in encoder.items()}
             self.word2idx_dict, self.idx2word_dict = encoder, decoder
+
+        # recorded info for ploting
+        self.rating_bins = []
 
         # Dataloader
         try:
@@ -91,11 +104,16 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             self.log.info('-----\nADV EPOCH %d\n-----' % adv_epoch)
             self.sig.update()
             if self.sig.adv_sig:
-                self.adv_train_generator(cfg.ADV_g_step)  # Generator
+                rating_bin = self.adv_train_generator(cfg.ADV_g_step)  # Generator
 
                 if adv_epoch % cfg.adv_log_step == 0 or adv_epoch == cfg.ADV_train_epoch - 1:
                     if cfg.if_save and not cfg.if_test:
                         self._save('ADV', adv_epoch)
+                if adv_epoch % 5 == 0:
+                    self.rating_bins.append(rating_bin)
+                if adv_epoch == 20:
+                    visual.training_plots.plot_ratings(self.rating_bins)
+
             else:
                 self.log.info('>>> Stop by adv_signal! Finishing adversarial training...')
                 break
@@ -111,9 +129,11 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         The gen is trained using policy gradients, using the reward from the discriminator.
         Training is done for num_batches batches.
         """
-
         discount_rate = 1
         total_g_loss = 0
+
+        training_bin = [0 for i in range(5)]
+
         dis_count_list = [discount_rate ** i for i in range(cfg.max_seq_len)]
         dis_count_matrix = torch.Tensor(dis_count_list).unsqueeze(0).repeat(cfg.batch_size, 1)
         if cfg.CUDA:
@@ -124,29 +144,41 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             if cfg.CUDA:
                 inp = inp.cuda()
             gen_sample, gen_sample_log_prob = self.gen.sample_teacher_forcing(inp)
-            word_reward, sentence_reward = self.dis.getReward(gen_sample)
+            word_reward, sentence_reward = self.dis.getReward(gen_sample, training_bin)
             sentence_reward = sentence_reward.repeat(1, cfg.max_seq_len)
-
             if word_reward is not None:
                 reward_matrix = sentence_reward * word_reward * dis_count_matrix
             else:
                 reward_matrix = sentence_reward
             for i in range(cfg.max_seq_len):
                 reward_matrix[:, i] = reward_matrix[:, i:].sum(dim=-1)
-
+            #reward_matrix = reward_matrix.float().requires_grad_()
             if cfg.CUDA:
                 reward_matrix = reward_matrix.cuda()
             adv_loss = torch.sum(reward_matrix * gen_sample_log_prob)
             if cfg.CUDA:
                 adv_loss = adv_loss.cuda()
-
+            #print("ADV_LOSS")
+            #print(adv_loss.item() / (inp.size()[0] * cfg.max_seq_len))
             self.optimize(self.gen_adv_opt, adv_loss, self.gen)
             total_g_loss += adv_loss.item()
-
+        #print("ADV LOSS FULL EPOCH")
+        #print(total_g_loss / g_step)
+        """
+        print("PARAMS")
+        counter = 0
+        for param in self.gen.parameters():
+            if counter > 40:
+                print("weight {0} sum = {1}".format(counter,torch.sum(param)))
+            counter += 1
+            if counter > 60:
+                break
+        """
         # ===Test===
         self.log.info(
             '[ADV-GEN]: g_loss = %.4f, %s' % (total_g_loss / (g_step * cfg.batch_size), self.cal_metrics(fmt_str=True)))
 
+        return training_bin
     def eval_dis(self, model, pos_val, neg_val):
         _, pos_reward = model.getReward(pos_val)
         _, neg_reward = model.getReward(neg_val)

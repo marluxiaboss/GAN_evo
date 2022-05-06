@@ -4,7 +4,7 @@ import numpy as np
 
 def plot_ratings(rating_bins):
     """
-    Show 20 iterations of training
+    Show 20 iterations of training with bar plots.
     """
 
     X = ['1 star', '2 stars', '3 stars', '4 stars', '5 stars']
@@ -16,12 +16,11 @@ def plot_ratings(rating_bins):
 
     X_axis = np.arange(len(X))
 
-    plt.bar(X_axis - 0.2, rating_bins0 , 0.1, label='epoch 0')
-    plt.bar(X_axis - 0.1, rating_bins1 , 0.1, label='epoch 5')
-    plt.bar(X_axis + 0, rating_bins2 , 0.1, label='epoch 10')
-    plt.bar(X_axis + 0.1, rating_bins3 , 0.1, label='epoch 15')
-    plt.bar(X_axis + 0.2, rating_bins4 , 0.1, label='epoch 20')
-
+    plt.bar(X_axis - 0.2, rating_bins0, 0.1, label='epoch 0')
+    plt.bar(X_axis - 0.1, rating_bins1, 0.1, label='epoch 5')
+    plt.bar(X_axis + 0, rating_bins2, 0.1, label='epoch 10')
+    plt.bar(X_axis + 0.1, rating_bins3, 0.1, label='epoch 15')
+    plt.bar(X_axis + 0.2, rating_bins4, 0.1, label='epoch 20')
 
     plt.xticks(X_axis, X)
     plt.xlabel("rating ")
@@ -29,7 +28,3 @@ def plot_ratings(rating_bins):
     plt.title("ratings compared at each 5 iteration")
     plt.legend()
     plt.savefig('ratings.png')
-
-
-
-
