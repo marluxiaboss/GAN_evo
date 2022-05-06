@@ -111,7 +111,6 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         The gen is trained using policy gradients, using the reward from the discriminator.
         Training is done for num_batches batches.
         """
-        pre_loss = self.train_gen_epoch(self.gen, self.train_data.loader, self.mle_criterion, self.gen_opt)
 
         discount_rate = 1
         total_g_loss = 0
