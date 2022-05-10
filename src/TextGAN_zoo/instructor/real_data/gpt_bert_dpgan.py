@@ -45,13 +45,12 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         self.gen = helpers.load_weight(self.gen, pretrained_model.state_dict())
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.gen.to(device)
-        counter = 0
         self.init_model()
 
         # Optimizer
         self.gen_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
         self.gen_adv_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
-        self.dis_opt = optim.Adam(self.dis.parameters(), lr=cfg.gen_lr)
+        self.dis_opt = optim.Adam(self.dis.parameters(), lr=cfg.dis_lr)
 
         # Tokenizer for the pretrained gpt2
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
@@ -108,7 +107,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
 
                 if adv_epoch % cfg.adv_log_step == 0 or adv_epoch == cfg.ADV_train_epoch - 1:
                     if cfg.if_save and not cfg.if_test:
-                        self._save('ADV', adv_epoch)
+                        self.save_save('ADV', adv_epoch)
                 if adv_epoch % 5 == 0:
                     self.rating_bins.append(rating_bin)
                 if adv_epoch == 20:

@@ -1,3 +1,5 @@
+from time import strftime, localtime
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -27,4 +29,5 @@ def plot_ratings(rating_bins):
     plt.ylabel("frequency")
     plt.title("ratings compared at each 5 iteration")
     plt.legend()
-    plt.savefig('ratings.png')
+    log_time_str = strftime("%m/%d_%/H%M_%S", localtime())
+    plt.savefig('/saved_plots/ratings:{}.png').format(log_time_str)

@@ -44,11 +44,14 @@ class BERT_sentiment(LSTMGenerator):
         print(samples)
         print("SENTENCE_reward")
         print(sentiments)
-        """
+
+
         reward_map = {'1 star' : 0.0, '2 stars': 1.0, '3 stars': 5.0, '4 stars': 20.0,
-                      '5 stars': 50.0}"""
+                      '5 stars': 50.0}
+        """
         reward_map = {'1 star' : 50.0, '2 stars': 20.0, '3 stars': 5.0, '4 stars': 1.0,
                       '5 stars': 0.0}
+        """
         sentence_rewards = torch.tensor([reward_map[sentiment['label']] for sentiment in sentiments], requires_grad=True)
         sentence_rewards = sentence_rewards.view(1, len(sentence_rewards))
         for sentiment in sentiments:
