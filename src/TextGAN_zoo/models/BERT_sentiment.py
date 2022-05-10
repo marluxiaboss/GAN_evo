@@ -39,14 +39,12 @@ class BERT_sentiment(LSTMGenerator):
         word_reward = F.nll_loss(pred, target.view(-1), reduction='none').view(batch_size, -1)
         sentence_reward = torch.mean(word_reward, dim=-1, keepdim=True)
         """
-        samples = samples.tolist()
-        samples = [[self.bpe.decode(sample)] for sample in samples]
+        sample = self.bpe.decode(samples.tolist())
 
-        # Get sentiment only for fist sample
-        sentiments = self.sentiment(samples[0])
+        sentiments = self.sentiment(sample)
 
         print("SAMPLES")
-        print(samples)
+        print(sample)
         print("SENTENCE_reward")
         print(sentiments)
 
@@ -59,4 +57,6 @@ class BERT_sentiment(LSTMGenerator):
         #word_rewards = [sentence_rewards for i in range(len(samples[0]))]
         for sentiment in sentiments:
             training_bin[int(label_map[sentiment['label']]) - 1] += 1
+        print("SENTENCE_SENTIMENT")
+        print(sentence_sentiment)
         return sentence_sentiment

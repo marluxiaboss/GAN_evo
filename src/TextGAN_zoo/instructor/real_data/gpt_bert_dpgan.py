@@ -136,8 +136,8 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             if cfg.CUDA:
                 inp = inp.cuda()
             gen_sample, gen_sample_log_prob = self.gen.sample_teacher_forcing(inp)
-            for i in range(gen_sample.size[0]):
-                sentence_sentiment = self.dis.getReward(gen_sample, training_bin)
+            for i in range(gen_sample.size()[0]):
+                sentence_sentiment = self.dis.getReward(gen_sample[i, :], training_bin)
                 word_sentiments = sentence_sentiment.repeat(1, cfg.max_seq_len)
                 target_sentiments = torch.full_like(word_sentiments, 1)
                 if cfg.CUDA:
