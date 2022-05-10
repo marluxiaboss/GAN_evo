@@ -49,8 +49,7 @@ class BERT_sentiment(LSTMGenerator):
         print(sentiments)
 
         label_map = {'NEGATIVE': 0.0, 'POSITIVE': 1.0}
-        sentence_rewards = torch.tensor([label_map[sentiment['label']] *
-                                         self.score_token(sentiment['score'], sentiment['label']) for sentiment in
+        sentence_rewards = torch.tensor([self.score_token(sentiment['score'], sentiment['label']) for sentiment in
                                          sentiments], requires_grad=True)
         sentence_sentiment = sentence_rewards.view(1, len(sentence_rewards))
         # maybe better to give rewards for only this length and not cfg.max_seqlen

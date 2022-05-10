@@ -139,7 +139,7 @@ args = [
     '--use_self_bleu', use_self_bleu,
     '--use_ppl', use_ppl,
 ]
-
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 args = list(map(str, args))
 my_env = os.environ.copy()
 call([executable, scriptname] + args, env=my_env, cwd=rootdir)
