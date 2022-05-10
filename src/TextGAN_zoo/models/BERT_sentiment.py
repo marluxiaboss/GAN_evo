@@ -24,31 +24,38 @@ class BERT_sentiment(LSTMGenerator):
         self.sentiment = pipeline(task='sentiment-analysis')
         self.bpe = get_encoder()
 
+    def score_token(self, score, label):
+        if label == 'POSITIVE':
+            return score
+        else:
+            return 1.0 - score
+
     def getReward(self, samples, training_bin, pos_or_neg_sample=None):
         """
-        Get word-level reward and sentence-level reward of samples.
+        Get word-level reward and sentence-level reward of one sample.
         """
 
         """
         word_reward = F.nll_loss(pred, target.view(-1), reduction='none').view(batch_size, -1)
         sentence_reward = torch.mean(word_reward, dim=-1, keepdim=True)
         """
-        word_reward = None
         samples = samples.tolist()
         samples = [[self.bpe.decode(sample)] for sample in samples]
-        sentiments = self.sentiment(samples)
+
+        # Get sentiment only for fist sample
+        sentiments = self.sentiment(samples[0])
 
         print("SAMPLES")
         print(samples)
         print("SENTENCE_reward")
         print(sentiments)
 
-        label_map = {'NEGATIVE': 0, 'POSITIVE': 1}
-        sentence_rewards = torch.tensor([label_map[sentiment['label']] for sentiment in sentiments], requires_grad=True)
-        sentence_rewards = sentence_rewards.view(1, len(sentence_rewards))
-        print("SENTENCE_REWARDS")
-        print(sentence_rewards)
-        sentence_rewards = sentence_rewards.view(1, len(sentence_rewards))
+        label_map = {'NEGATIVE': 0.0, 'POSITIVE': 1.0}
+        sentence_rewards = torch.tensor([label_map[sentiment['label']] *
+                                         self.score_token(sentiment['score'], sentiment['label']) for sentiment in
+                                         sentiments], requires_grad=True)
+        sentence_reward = sentence_rewards.view(1, len(sentence_rewards))
+        word_rewards = [sentence_rewards for i in range(len(samples[0]))]
         for sentiment in sentiments:
-            training_bin[sentiment['label'] - 1] += 1
-        return word_reward, sentence_rewards
+            training_bin[int(label_map[sentiment['label']]) - 1] += 1
+        return word_rewards, sentence_reward
