@@ -135,9 +135,11 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             inp = self.train_data.random_batch()['input']
             if cfg.CUDA:
                 inp = inp.cuda()
-            gen_sample, gen_sample_log_prob = self.gen.sample_teacher_forcing(inp)
-            for i in range(gen_sample.size()[0]):
-                sentence_sentiment = self.dis.getReward(gen_sample[i, :], training_bin)
+            for i in range(inp.size()[0]):
+                inp_sample = inp[i, :].view(1, len(inp[i, :]))
+                gen_sample, gen_sample_log_prob = self.gen.sample_teacher_forcing(inp_sample)
+                gen_sample = gen_sample[0, :]
+                sentence_sentiment = self.dis.getReward(gen_sample, training_bin)
                 if cfg.CUDA:
                     sentence_sentiment = sentence_sentiment.cuda()
                 sentence_sentiment = sentence_sentiment * gen_sample_log_prob
@@ -154,8 +156,10 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
                     adv_loss = adv_loss.cuda()
                 # print("ADV_LOSS")
                 # print(adv_loss.item() / (inp.size()[0] * cfg.max_seq_len))
-                self.optimize(self.gen_adv_opt, adv_loss, self.gen, retain_graph=True)
+                self.optimize(self.gen_adv_opt, adv_loss, self.gen)
                 total_g_loss += adv_loss.item()
+        # print("ADV LOSS FULL EPOCH")
+        # print(total_g_loss / g_step)
         """
         print("PARAMS")
         counter = 0
