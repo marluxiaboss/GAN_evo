@@ -107,7 +107,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
 
                 if adv_epoch % cfg.adv_log_step == 0 or adv_epoch == cfg.ADV_train_epoch - 1:
                     if cfg.if_save and not cfg.if_test:
-                        self.save_save('ADV', adv_epoch)
+                        self._save('ADV', adv_epoch)
                 if adv_epoch % 5 == 0:
                     self.rating_bins.append(rating_bin)
                 if adv_epoch == 20:
@@ -131,7 +131,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         discount_rate = 1
         total_g_loss = 0
 
-        training_bin = [0 for i in range(5)]
+        training_bin = [0 for i in range(2)]
 
         dis_count_list = [discount_rate ** i for i in range(cfg.max_seq_len)]
         dis_count_matrix = torch.Tensor(dis_count_list).unsqueeze(0).repeat(cfg.batch_size, 1)

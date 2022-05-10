@@ -9,7 +9,7 @@ def plot_ratings(rating_bins):
     Show 20 iterations of training with bar plots.
     """
 
-    X = ['1 star', '2 stars', '3 stars', '4 stars', '5 stars']
+    X = ['NEGATIVE', 'POSITIVE']
     rating_bins0 = rating_bins[0]
     rating_bins1 = rating_bins[1]
     rating_bins2 = rating_bins[2]

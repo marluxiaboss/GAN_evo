@@ -21,15 +21,13 @@ class BERT_sentiment(LSTMGenerator):
     def __init__(self, embedding_dim, hidden_dim, vocab_size, max_seq_len, padding_idx, gpu=False):
         super(BERT_sentiment, self).__init__(embedding_dim, hidden_dim, vocab_size, max_seq_len, padding_idx, gpu)
         self.name = 'dpgan_d'
-        self.sentiment = pipeline(task='sentiment-analysis',
-                                  model='nlptown/bert-base-multilingual-uncased-sentiment',
-                                  tokenizer='nlptown/bert-base-multilingual-uncased-sentiment')
+        self.sentiment = pipeline(task='sentiment-analysis')
         self.bpe = get_encoder()
+
     def getReward(self, samples, training_bin, pos_or_neg_sample=None):
         """
         Get word-level reward and sentence-level reward of samples.
         """
-
 
         """
         word_reward = F.nll_loss(pred, target.view(-1), reduction='none').view(batch_size, -1)
@@ -45,16 +43,12 @@ class BERT_sentiment(LSTMGenerator):
         print("SENTENCE_reward")
         print(sentiments)
 
-
-        reward_map = {'1 star' : 0.0, '2 stars': 1.0, '3 stars': 5.0, '4 stars': 20.0,
-                      '5 stars': 50.0}
-        """
-        reward_map = {'1 star' : 50.0, '2 stars': 20.0, '3 stars': 5.0, '4 stars': 1.0,
-                      '5 stars': 0.0}
-        """
-        sentence_rewards = torch.tensor([reward_map[sentiment['label']] for sentiment in sentiments], requires_grad=True)
+        label_map = {'NEGATIVE': 0, 'POSITIVE': 1}
+        sentence_rewards = torch.tensor([label_map[sentiment['label']] for sentiment in sentiments], requires_grad=True)
+        sentence_rewards = sentence_rewards.view(1, len(sentence_rewards))
+        print("SENTENCE_REWARDS")
+        print(sentence_rewards)
         sentence_rewards = sentence_rewards.view(1, len(sentence_rewards))
         for sentiment in sentiments:
             training_bin[sentiment['label'] - 1] += 1
         return word_reward, sentence_rewards
-
