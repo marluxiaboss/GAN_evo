@@ -37,11 +37,10 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         self.dis = BERT_sentiment(cfg.gen_embed_dim, cfg.gen_hidden_dim, cfg.vocab_size, cfg.max_seq_len,
                                   cfg.padding_idx, gpu=cfg.CUDA)
 
-
         # Load weights from huggingface GPT_2 transformer class
         pretrained_model = GPT2Model.from_pretrained("gpt2")
         pretrained_model.cuda()
-        #summary(pretrained_model, (1,14))
+        # summary(pretrained_model, (1,14))
         self.gen = helpers.load_weight(self.gen, pretrained_model.state_dict())
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.gen.to(device)
@@ -128,41 +127,32 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         The gen is trained using policy gradients, using the reward from the discriminator.
         Training is done for num_batches batches.
         """
-        discount_rate = 1
         total_g_loss = 0
 
         training_bin = [0 for i in range(2)]
-
-        dis_count_list = [discount_rate ** i for i in range(cfg.max_seq_len)]
-        dis_count_matrix = torch.Tensor(dis_count_list).unsqueeze(0).repeat(cfg.batch_size, 1)
-        if cfg.CUDA:
-            dis_count_matrix = dis_count_matrix.cuda()
 
         for step in range(g_step):
             inp = self.train_data.random_batch()['input']
             if cfg.CUDA:
                 inp = inp.cuda()
             gen_sample, gen_sample_log_prob = self.gen.sample_teacher_forcing(inp)
-            word_reward, sentence_reward = self.dis.getReward(gen_sample, training_bin)
-            sentence_reward = sentence_reward.repeat(1, cfg.max_seq_len)
-            if word_reward is not None:
-                reward_matrix = sentence_reward * word_reward * dis_count_matrix
-            else:
-                reward_matrix = sentence_reward
-            for i in range(cfg.max_seq_len):
-                reward_matrix[:, i] = reward_matrix[:, i:].sum(dim=-1)
-            #reward_matrix = reward_matrix.float().requires_grad_()
-            if cfg.CUDA:
-                reward_matrix = reward_matrix.cuda()
-            adv_loss = torch.sum(reward_matrix * gen_sample_log_prob)
-            if cfg.CUDA:
-                adv_loss = adv_loss.cuda()
-            #print("ADV_LOSS")
-            #print(adv_loss.item() / (inp.size()[0] * cfg.max_seq_len))
-            self.optimize(self.gen_adv_opt, adv_loss, self.gen)
-            total_g_loss += adv_loss.item()
-        #print("ADV LOSS FULL EPOCH")
-        #print(total_g_loss / g_step)
+            for i in range(gen_sample.size[0]):
+                sentence_sentiment = self.dis.getReward(gen_sample, training_bin)
+                word_sentiments = sentence_sentiment.repeat(1, cfg.max_seq_len)
+                target_sentiments = torch.full_like(word_sentiments, 1)
+                if cfg.CUDA:
+                    word_sentiments = word_sentiments.cuda()
+                    target_sentiments = target_sentiments.cuda()
+                loss = nn.MSELoss
+                adv_loss = loss(word_sentiments, target_sentiments)
+                if cfg.CUDA:
+                    adv_loss = adv_loss.cuda()
+                # print("ADV_LOSS")
+                # print(adv_loss.item() / (inp.size()[0] * cfg.max_seq_len))
+                self.optimize(self.gen_adv_opt, adv_loss, self.gen)
+                total_g_loss += adv_loss.item()
+        # print("ADV LOSS FULL EPOCH")
+        # print(total_g_loss / g_step)
         """
         print("PARAMS")
         counter = 0
@@ -178,6 +168,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             '[ADV-GEN]: g_loss = %.4f, %s' % (total_g_loss / (g_step * cfg.batch_size), self.cal_metrics(fmt_str=True)))
 
         return training_bin
+
     def eval_dis(self, model, pos_val, neg_val):
         _, pos_reward = model.getReward(pos_val)
         _, neg_reward = model.getReward(neg_val)
@@ -191,8 +182,8 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         with torch.no_grad():
             # Prepare data for evaluation
             eval_samples, _ = self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
-                                                    batch_size=cfg.samples_num, temperature=0.7, top_k=40,
-                                                    sample_pos2=False)
+                                                       batch_size=cfg.samples_num, temperature=0.7, top_k=40,
+                                                       sample_pos2=False)
             gen_data = GenDataIter(eval_samples)
             # gen_tokens = tensor_to_tokens(eval_samples, self.idx2word_dict)
             eval_samples = eval_samples.tolist()
@@ -218,7 +209,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             torch.save(self.gen.state_dict(), cfg.save_model_root + 'gen_{}_{:05d}.pt'.format(phase, epoch))
         save_sample_path = cfg.save_samples_root + 'samples_{}_{:05d}.txt'.format(phase, epoch)
         samples, _ = self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
-                                           batch_size=50, temperature=0.7, top_k=40)
+                                              batch_size=50, temperature=0.7, top_k=40)
         samples = samples.tolist()
         # samples = [[self.tokenizer.decode(sample)] for sample in samples]
         samples = [[self.bpe.decode(sample)] for sample in samples]
