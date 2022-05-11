@@ -30,4 +30,5 @@ def plot_ratings(rating_bins):
     plt.title("ratings compared at each 5 iteration")
     plt.legend()
     log_time_str = strftime("%m/%d_%/H%M_%S", localtime())
-    plt.savefig('/saved_plots/ratings:{}.png').format(log_time_str)
+    file = '/saved_plots/ratings:{}.png'.format(log_time_str)
+    plt.savefig(file)

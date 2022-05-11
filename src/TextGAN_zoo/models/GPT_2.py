@@ -47,7 +47,8 @@ class GPT_2(TransformerGenerator):
             sampled, log_probs = self.sample_sequence(cfg.max_seq_len - 1, context=context, start_token=None,
                                                       batch_size=1, temperature=0.7,
                                                       top_k=40)
-            sampled = sampled[:, len(context):]
+            #sampled = sampled[:, len(context):]
+            sampled = sampled[:, :cfg.max_seq_len - 1]
             samples[i, :] = sampled.view(len(sampled[0]))
 
         return samples, log_probs
