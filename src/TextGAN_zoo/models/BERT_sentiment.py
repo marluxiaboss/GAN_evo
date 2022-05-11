@@ -55,7 +55,7 @@ class BERT_sentiment(LSTMGenerator):
         # maybe better to give rewards for only this length and not cfg.max_seqlen
         #word_rewards = [sentence_rewards for i in range(len(samples[0]))]
         for sentiment in sentiments:
-            training_bin[int(label_map[sentiment['label']]) - 1] += 1
+            training_bin[int(label_map[sentiment['label']])] += 1
         print("SENTENCE_SENTIMENT")
         print(sentence_sentiment)
         return sentence_sentiment

@@ -102,14 +102,18 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             self.log.info('-----\nADV EPOCH %d\n-----' % adv_epoch)
             self.sig.update()
             if self.sig.adv_sig:
-                rating_bin = self.adv_train_generator(cfg.ADV_g_step)  # Generator
-
+                if adv_epoch == 0:
+                    rating_bin = self.sample_sentiment()
+                else:
+                    rating_bin = self.adv_train_generator(cfg.ADV_g_step)  # Generator
+                print("RATING_BINS:EPOCH{}".format(adv_epoch))
+                print(rating_bin)
                 if adv_epoch % cfg.adv_log_step == 0 or adv_epoch == cfg.ADV_train_epoch - 1:
                     if cfg.if_save and not cfg.if_test:
                         self._save('ADV', adv_epoch)
-                if adv_epoch % 5 == 0:
+                if adv_epoch % 2 == 0:
                     self.rating_bins.append(rating_bin)
-                if adv_epoch == 20:
+                if adv_epoch == 12:
                     visual.training_plots.plot_ratings(self.rating_bins)
 
             else:
@@ -121,6 +125,23 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
 
         self._run()
         pass
+
+    def sample_sentiment(self):
+        """
+        Function to be called before training to get an esimate of the sentiments of the generated sentences.
+        """
+        training_bin = [0 for i in range(2)]
+
+        for step in range(cfg.ADV_g_step):
+            inp = self.train_data.random_batch()['input']
+            if cfg.CUDA:
+                inp = inp.cuda()
+            for i in range(inp.size()[0]):
+                inp_sample = inp[i, :].view(1, len(inp[i, :]))
+                gen_sample, gen_sample_log_prob = self.gen.sample_teacher_forcing(inp_sample)
+                gen_sample = gen_sample[0, :]
+                self.dis.getReward(gen_sample, training_bin)
+        return training_bin
 
     def adv_train_generator(self, g_step):
         """
@@ -150,8 +171,8 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
                     target_sentiments = target_sentiments.cuda()
                 loss = nn.MSELoss()
                 adv_loss = loss(word_sentiments, target_sentiments)
-                print("adv_loss")
-                print(adv_loss)
+                # print("adv_loss")
+                # print(adv_loss)
                 if cfg.CUDA:
                     adv_loss = adv_loss.cuda()
                 # print("ADV_LOSS")
@@ -160,16 +181,18 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
                 total_g_loss += adv_loss.item()
         # print("ADV LOSS FULL EPOCH")
         # print(total_g_loss / g_step)
+
         """
         print("PARAMS")
         counter = 0
         for param in self.gen.parameters():
             if counter > 40:
-                print("weight {0} sum = {1}".format(counter,torch.sum(param)))
+                print("weight {0} sum = {1}".format(counter, torch.sum(param)))
             counter += 1
             if counter > 60:
                 break
         """
+
         # ===Test===
         self.log.info(
             '[ADV-GEN]: g_loss = %.4f, %s' % (total_g_loss / (g_step * cfg.batch_size), self.cal_metrics(fmt_str=True)))
