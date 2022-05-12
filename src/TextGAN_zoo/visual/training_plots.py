@@ -31,7 +31,7 @@ def plot_ratings(rating_bins):
     plt.xticks(X_axis, X)
     plt.xlabel("rating ")
     plt.ylabel("frequency")
-    plt.title("ratings compared at each 5 iteration")
+    plt.title("ratings compared at each epoch")
     plt.legend()
     log_time_str = strftime("%m_%d_%H%M", localtime())
     file = 'saved_plots/ratings{}.png'.format(log_time_str)

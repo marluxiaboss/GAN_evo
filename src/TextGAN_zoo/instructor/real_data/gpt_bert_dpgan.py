@@ -46,9 +46,10 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         self.gen.to(device)
         self.init_model()
 
+
         # Optimizer
         self.gen_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
-        self.gen_adv_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
+        self.gen_adv_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_adv_lr)
         self.dis_opt = optim.Adam(self.dis.parameters(), lr=cfg.dis_lr)
 
         # Tokenizer for the pretrained gpt2
@@ -106,8 +107,8 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
                     rating_bin = self.sample_sentiment()
                 else:
                     rating_bin = self.adv_train_generator(cfg.ADV_g_step)  # Generator
-                print("RATING_BINS:EPOCH{}".format(adv_epoch))
-                print(rating_bin)
+                self.log.info("RATING_BINS:EPOCH{}".format(adv_epoch))
+                self.log.info(rating_bin)
                 if adv_epoch % cfg.adv_log_step == 0 or adv_epoch == cfg.ADV_train_epoch - 1:
                     if cfg.if_save and not cfg.if_test:
                         self._save('ADV', adv_epoch)
@@ -128,7 +129,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
 
     def sample_sentiment(self):
         """
-        Function to be called before training to get an esimate of the sentiments of the generated sentences.
+        Function to be called before training to get an estimate of the sentiments of the generated sentences.
         """
         training_bin = [0 for i in range(2)]
 
@@ -154,40 +155,58 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
 
         for step in range(g_step):
             inp = self.train_data.random_batch()['input']
+
             if cfg.CUDA:
                 inp = inp.cuda()
             for i in range(inp.size()[0]):
                 inp_sample = inp[i, :].view(1, len(inp[i, :]))
+
+                # generate one sample from context
                 gen_sample, gen_sample_log_prob = self.gen.sample_teacher_forcing(inp_sample)
                 gen_sample = gen_sample[0, :]
+
+                # give reward to the generated sample
                 sentence_sentiment = self.dis.getReward(gen_sample, training_bin)
+                if i == 0:
+                    sample = self.bpe.decode(gen_sample.tolist())
+                    self.log.info("SAMPLE: ")
+                    self.log.info(sample)
+                    self.log.info("SENTIMENT_SCORE: {}".format(sentence_sentiment))
                 if cfg.CUDA:
                     sentence_sentiment = sentence_sentiment.cuda()
+
+                # attribute this reward to each token and compute loss
                 sentence_sentiment = sentence_sentiment * gen_sample_log_prob
                 word_sentiments = sentence_sentiment.repeat(1, cfg.max_seq_len)
                 target_sentiments = torch.full_like(word_sentiments, 1)
                 if cfg.CUDA:
                     word_sentiments = word_sentiments.cuda()
                     target_sentiments = target_sentiments.cuda()
-                loss = nn.MSELoss()
+                # loss = nn.MSELoss()
+                loss = nn.L1Loss()
+                # loss = nn.BCELoss()
+                #loss = nn.CrossEntropyLoss()
                 adv_loss = loss(word_sentiments, target_sentiments)
-                # print("adv_loss")
-                # print(adv_loss)
+                if i == 0:
+                    self.log.info("word_sentiments")
+                    self.log.info(word_sentiments)
+                    self.log.info("target_sentiments")
+                    self.log.info(target_sentiments)
+                    self.log.info("ADV_LOSS")
+                    self.log.info(adv_loss)
                 if cfg.CUDA:
                     adv_loss = adv_loss.cuda()
-                # print("ADV_LOSS")
-                # print(adv_loss.item() / (inp.size()[0] * cfg.max_seq_len))
                 self.optimize(self.gen_adv_opt, adv_loss, self.gen)
                 total_g_loss += adv_loss.item()
+
         # print("ADV LOSS FULL EPOCH")
         # print(total_g_loss / g_step)
-
         """
-        print("PARAMS")
+        self.log.info("PARAMS")
         counter = 0
         for param in self.gen.parameters():
             if counter > 40:
-                print("weight {0} sum = {1}".format(counter, torch.sum(param)))
+                self.log.info("weight {0} sum = {1}".format(counter, torch.sum(param)))
             counter += 1
             if counter > 60:
                 break
