@@ -44,8 +44,8 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         self.gen = helpers.load_weight(self.gen, pretrained_model.state_dict())
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.gen.to(device)
+        self.dis.to(device)
         self.init_model()
-
 
         # Optimizer
         self.gen_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
@@ -103,18 +103,20 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             self.log.info('-----\nADV EPOCH %d\n-----' % adv_epoch)
             self.sig.update()
             if self.sig.adv_sig:
+                """
                 if adv_epoch == 0:
                     rating_bin = self.sample_sentiment()
-                else:
-                    rating_bin = self.adv_train_generator(cfg.ADV_g_step)  # Generator
+
+                else:"""
+                rating_bin = self.adv_train_generator(cfg.ADV_g_step)  # Generator
                 self.log.info("RATING_BINS:EPOCH{}".format(adv_epoch))
                 self.log.info(rating_bin)
                 if adv_epoch % cfg.adv_log_step == 0 or adv_epoch == cfg.ADV_train_epoch - 1:
                     if cfg.if_save and not cfg.if_test:
                         self._save('ADV', adv_epoch)
-                if adv_epoch % 2 == 0:
+                if adv_epoch % 1 == 0:
                     self.rating_bins.append(rating_bin)
-                if adv_epoch == 12:
+                if adv_epoch == 7:
                     visual.training_plots.plot_ratings(self.rating_bins)
 
             else:
@@ -142,7 +144,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
                 inp_sample = inp[i, :].view(1, len(inp[i, :]))
                 gen_sample, gen_sample_log_prob = self.gen.sample_teacher_forcing(inp_sample)
                 gen_sample = gen_sample[0, :]
-                self.dis.getReward(gen_sample, training_bin)
+                self.dis.getReward(gen_sample, training_bin, one_sample=True)
         return training_bin
 
     def adv_train_generator(self, g_step):
@@ -158,48 +160,52 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             inp = data['input']
             print("BATCH_SIZE")
             print("iteration{}, size:{}".format(count,
-                    data_loader.batch_size))
+                                                data_loader.batch_size))
             if cfg.CUDA:
                 inp = inp.cuda()
-            for i in range(inp.size()[0]):
-                inp_sample = inp[i, :].view(1, len(inp[i, :]))
 
-                # generate one sample from context
-                gen_sample, gen_sample_log_prob = self.gen.sample_teacher_forcing(inp_sample)
-                gen_sample = gen_sample[0, :]
+            # generate one sample from context
+            print("GENERATION_BEGIN")
+            gen_samples, gen_sample_log_prob = self.gen.sample_teacher_forcing(inp)
+            print("GENERATION_END")
+            # give reward to the generated sample
+            print("BERT_BEGIN")
+            sentence_sentiment = self.dis.getReward(gen_samples, training_bin)
+            print("BERT_END")
+            """
+            if i == 0:
+                sample = self.bpe.decode(gen_sample.tolist())
+                self.log.info("SAMPLE: ")
+                self.log.info(sample)
+                self.log.info("SENTIMENT_SCORE: {}".format(sentence_sentiment))
+            """
+            if cfg.CUDA:
+                sentence_sentiment = sentence_sentiment.cuda()
 
-                # give reward to the generated sample
-                sentence_sentiment = self.dis.getReward(gen_sample, training_bin)
-                if i == 0:
-                    sample = self.bpe.decode(gen_sample.tolist())
-                    self.log.info("SAMPLE: ")
-                    self.log.info(sample)
-                    self.log.info("SENTIMENT_SCORE: {}".format(sentence_sentiment))
-                if cfg.CUDA:
-                    sentence_sentiment = sentence_sentiment.cuda()
-
-                # attribute this reward to each token and compute loss
-                sentence_sentiment = sentence_sentiment * gen_sample_log_prob
-                word_sentiments = sentence_sentiment.repeat(1, cfg.max_seq_len)
-                target_sentiments = torch.full_like(word_sentiments, 1)
-                if cfg.CUDA:
-                    word_sentiments = word_sentiments.cuda()
-                    target_sentiments = target_sentiments.cuda()
-                #loss = nn.MSELoss()
-                #loss = nn.L1Loss()
-                loss = nn.BCEWithLogitsLoss()
-                #loss = nn.CrossEntropyLoss()
-                adv_loss = loss(word_sentiments, target_sentiments)
-                if i == 0:
-                    self.log.info("word_sentiments")
-                    self.log.info(word_sentiments)
-                    self.log.info("target_sentiments")
-                    self.log.info(target_sentiments)
-                    self.log.info("ADV_LOSS")
-                    self.log.info(adv_loss)
-                if cfg.CUDA:
-                    adv_loss = adv_loss.cuda()
-                #self.optimize(self.gen_adv_opt, adv_loss, self.gen)
+            # attribute this reward to each token and compute loss
+            sentence_sentiment = sentence_sentiment * gen_sample_log_prob
+            word_sentiments = sentence_sentiment.repeat(cfg.batch_size, cfg.max_seq_len)
+            target_sentiments = torch.full_like(word_sentiments, 1)
+            if cfg.CUDA:
+                word_sentiments = word_sentiments.cuda()
+                target_sentiments = target_sentiments.cuda()
+            # loss = nn.MSELoss()
+            # loss = nn.L1Loss()
+            loss = nn.BCEWithLogitsLoss()
+            # loss = nn.CrossEntropyLoss()
+            adv_loss = loss(word_sentiments, target_sentiments)
+            """
+            if i == 0:
+                self.log.info("word_sentiments")
+                self.log.info(word_sentiments)
+                self.log.info("target_sentiments")
+                self.log.info(target_sentiments)
+                self.log.info("ADV_LOSS")
+                self.log.info(adv_loss)
+            """
+            if cfg.CUDA:
+                adv_loss = adv_loss.cuda()
+                # self.optimize(self.gen_adv_opt, adv_loss, self.gen)
 
                 # accumulate the gradients
                 adv_loss.backward()
@@ -217,7 +223,6 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             counter += 1
             if counter > 60:
                 break
-
 
         # ===Test===
         self.log.info(
@@ -273,7 +278,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
 
     @staticmethod
     def optimize(opt, loss, model=None, retain_graph=False):
-        #loss.backward(retain_graph=retain_graph)
+        # loss.backward(retain_graph=retain_graph)
         opt.step()
         model.zero_grad()
         opt.zero_grad()
