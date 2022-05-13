@@ -130,6 +130,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
     def sample_sentiment(self):
         """
         Function to be called before training to get an estimate of the sentiments of the generated sentences.
+        TODO: use this function with the whole dataset and call it every epoch to compute the sentiment_bins.
         """
         training_bin = [0 for i in range(2)]
 
@@ -152,10 +153,12 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         total_g_loss = 0
 
         training_bin = [0 for i in range(2)]
-
-        for step in range(g_step):
-            inp = self.train_data.random_batch()['input']
-
+        data_loader = self.train_data.loader
+        for count, data in enumerate(data_loader):
+            inp = data['input']
+            print("BATCH_SIZE")
+            print("iteration{}, size:{}".format(count,
+                    data_loader.batch_size))
             if cfg.CUDA:
                 inp = inp.cuda()
             for i in range(inp.size()[0]):
