@@ -49,7 +49,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
 
         # Optimizer
         self.gen_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
-        self.gen_adv_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_adv_lr)
+        self.gen_adv_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
         self.dis_opt = optim.Adam(self.dis.parameters(), lr=cfg.dis_lr)
 
         # Tokenizer for the pretrained gpt2
@@ -182,9 +182,9 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
                 if cfg.CUDA:
                     word_sentiments = word_sentiments.cuda()
                     target_sentiments = target_sentiments.cuda()
-                # loss = nn.MSELoss()
-                loss = nn.L1Loss()
-                # loss = nn.BCELoss()
+                #loss = nn.MSELoss()
+                #loss = nn.L1Loss()
+                loss = nn.BCEWithLogitsLoss()
                 #loss = nn.CrossEntropyLoss()
                 adv_loss = loss(word_sentiments, target_sentiments)
                 if i == 0:
@@ -196,12 +196,16 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
                     self.log.info(adv_loss)
                 if cfg.CUDA:
                     adv_loss = adv_loss.cuda()
-                self.optimize(self.gen_adv_opt, adv_loss, self.gen)
+                #self.optimize(self.gen_adv_opt, adv_loss, self.gen)
+
+                # accumulate the gradients
+                adv_loss.backward()
                 total_g_loss += adv_loss.item()
+            self.optimize(self.gen_adv_opt, adv_loss, self.gen)
 
         # print("ADV LOSS FULL EPOCH")
         # print(total_g_loss / g_step)
-        """
+
         self.log.info("PARAMS")
         counter = 0
         for param in self.gen.parameters():
@@ -210,7 +214,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             counter += 1
             if counter > 60:
                 break
-        """
+
 
         # ===Test===
         self.log.info(
@@ -266,6 +270,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
 
     @staticmethod
     def optimize(opt, loss, model=None, retain_graph=False):
-        opt.zero_grad()
-        loss.backward(retain_graph=retain_graph)
+        #loss.backward(retain_graph=retain_graph)
         opt.step()
+        model.zero_grad()
+        opt.zero_grad()
