@@ -25,7 +25,10 @@ def cut_eot_token(tensor):
         j += 1
     if first_eot_index is not None:
         out = tensor[:first_eot_index]
-    return out
+    if out is not None:
+        return out
+    else:
+        return tensor
 
 
 def get_tokenlized(file):

@@ -21,6 +21,7 @@ class GPT_2(TransformerGenerator):
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
         self.bpe = get_encoder()
         super(GPT_2, self).__init__(self.config)
+
     """
     def sample_sequence(self, length, start_token=None, batch_size=None, context=None, temperature=1, top_k=0,
                         device='cuda', sample=True, sample_pos2=False):
@@ -37,8 +38,8 @@ class GPT_2(TransformerGenerator):
             log_prob: batch_size * seq_len  (log probabilities)
         """
         batch_size, _ = inp.size()
-        samples = torch.zeros(batch_size, cfg.max_seq_len - 1).long()
-        #TODO: optimize generation by genrating all the samples at the same time.
+        # samples = torch.zeros(batch_size, cfg.max_seq_len - 1).long()
+        # TODO: optimize generation by genrating all the samples at the same time.
         """
         for i in range(batch_size):
             context = inp[i]
@@ -53,7 +54,7 @@ class GPT_2(TransformerGenerator):
             sampled = sampled[:, :cfg.max_seq_len - 1]
             samples[i, :] = sampled.view(len(sampled[0]))
         """
-        #TODO: this line is problematic but necessary
+        # TODO: this line is problematic but necessary
         context = [cut_eot_token(inpi)[:8] for inpi in inp]
         context = torch.stack(context)
         if cfg.CUDA:
@@ -62,8 +63,7 @@ class GPT_2(TransformerGenerator):
                                                   batch_size=cfg.batch_size, temperature=0.7,
                                                   top_k=40, skip_context_init=True)
 
-
-        return samples, log_probs
+        return sampled, log_probs
 
     def sample_sequence(self, length, start_token=None, batch_size=None, context=None, temperature=1, top_k=0,
                         device='cuda', sample=True, sample_pos2=False, skip_context_init=False):
@@ -75,18 +75,18 @@ class GPT_2(TransformerGenerator):
             if start_token is None:
                 assert context is not None, 'Specify exactly one of start_token and context!'
                 context = torch.tensor(context, dtype=torch.long, device=device).unsqueeze(0).repeat(batch_size, 1)
-                #context = context.clone().detach().float().requires_grad_(True).unsqueeze(0).repeat(batch_size, 1)
+                # context = context.clone().detach().float().requires_grad_(True).unsqueeze(0).repeat(batch_size, 1)
             else:
                 assert context is None, 'Specify exactly one of start_token and context!'
                 context = torch.full((batch_size, 1), start_token, device=device, dtype=torch.long)
-                #device =...
+                # device =...
 
         prev = context
         output = context
         past = None
         if cfg.CUDA:
             prev, output = prev.cuda(), output.cuda()
-        #with torch.no_grad():
+        # with torch.no_grad():
         for i in range(length):
             logits, past = self(prev, past=past)
             logits = logits[:, -1, :] / temperature
