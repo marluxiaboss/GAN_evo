@@ -156,22 +156,22 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
 
         training_bin = [0 for i in range(2)]
         data_loader = self.train_data.loader
+        self.gen_adv_opt.zero_grad()
         for count, data in enumerate(data_loader):
             inp = data['input']
+            """
             print("BATCH_SIZE")
             print("iteration{}, size:{}".format(count,
                                                 data_loader.batch_size))
+            """
             if cfg.CUDA:
                 inp = inp.cuda()
 
             # generate one sample from context
-            print("GENERATION_BEGIN")
             gen_samples, gen_sample_log_prob = self.gen.sample_teacher_forcing(inp)
-            print("GENERATION_END")
+
             # give reward to the generated sample
-            print("BERT_BEGIN")
             sentence_sentiment = self.dis.getReward(gen_samples, training_bin)
-            print("BERT_END")
             """
             if i == 0:
                 sample = self.bpe.decode(gen_sample.tolist())
@@ -184,14 +184,15 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
 
             # attribute this reward to each token and compute loss
             sentence_sentiment = sentence_sentiment * gen_sample_log_prob
-            word_sentiments = sentence_sentiment.repeat(cfg.batch_size, cfg.max_seq_len)
+            word_sentiments = sentence_sentiment.repeat(cfg.max_seq_len, 1)
+            word_sentiments = torch.transpose(word_sentiments, 0, 1)
             target_sentiments = torch.full_like(word_sentiments, 1)
             if cfg.CUDA:
                 word_sentiments = word_sentiments.cuda()
                 target_sentiments = target_sentiments.cuda()
             # loss = nn.MSELoss()
-            # loss = nn.L1Loss()
-            loss = nn.BCEWithLogitsLoss()
+            loss = nn.L1Loss()
+            # loss = nn.BCEWithLogitsLoss()
             # loss = nn.CrossEntropyLoss()
             adv_loss = loss(word_sentiments, target_sentiments)
             """
@@ -207,10 +208,14 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
                 adv_loss = adv_loss.cuda()
                 # self.optimize(self.gen_adv_opt, adv_loss, self.gen)
 
-                # accumulate the gradients
-                adv_loss.backward()
-                total_g_loss += adv_loss.item()
-            self.optimize(self.gen_adv_opt, adv_loss, self.gen)
+            # accumulate the gradients
+            adv_loss.backward()
+            total_g_loss += adv_loss.item()
+
+            # accumulate the gradient and update weights only when enough accumulated
+            # this allow us to have batch size = eg 32 and effectively 128
+            if count % 4 == 0:
+                self.optimize(self.gen_adv_opt, adv_loss, self.gen)
 
         # print("ADV LOSS FULL EPOCH")
         # print(total_g_loss / g_step)
@@ -280,5 +285,4 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
     def optimize(opt, loss, model=None, retain_graph=False):
         # loss.backward(retain_graph=retain_graph)
         opt.step()
-        model.zero_grad()
         opt.zero_grad()

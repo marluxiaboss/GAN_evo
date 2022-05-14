@@ -38,9 +38,8 @@ class GPT_2(TransformerGenerator):
             log_prob: batch_size * seq_len  (log probabilities)
         """
         batch_size, _ = inp.size()
-        # samples = torch.zeros(batch_size, cfg.max_seq_len - 1).long()
-        # TODO: optimize generation by genrating all the samples at the same time.
         """
+        samples = torch.zeros(batch_size, cfg.max_seq_len - 1).long()
         for i in range(batch_size):
             context = inp[i]
 
@@ -55,8 +54,10 @@ class GPT_2(TransformerGenerator):
             samples[i, :] = sampled.view(len(sampled[0]))
         """
         # TODO: this line is problematic but necessary
+
         context = [cut_eot_token(inpi)[:8] for inpi in inp]
         context = torch.stack(context)
+
         if cfg.CUDA:
             context = context.cuda()
         sampled, log_probs = self.sample_sequence(cfg.max_seq_len - 1, context=context, start_token=None,
@@ -80,7 +81,6 @@ class GPT_2(TransformerGenerator):
                 assert context is None, 'Specify exactly one of start_token and context!'
                 context = torch.full((batch_size, 1), start_token, device=device, dtype=torch.long)
                 # device =...
-
         prev = context
         output = context
         past = None
@@ -104,5 +104,8 @@ class GPT_2(TransformerGenerator):
                 prev = torch.multinomial(log_probs, num_samples=1)
             else:
                 _, prev = torch.topk(log_probs, k=1, dim=-1)
+            # print("output{}".format(i))
+            # print(output)
+
             output = torch.cat((output, prev), dim=1)
-        return output, torch.sum(log_probs)
+        return output, torch.sum(log_probs) / cfg.batch_size

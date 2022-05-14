@@ -29,7 +29,7 @@ class BERT_sentiment(LSTMGenerator):
             return score
         else:
             return 1.0 - score
-    def getReward(self, samples, training_bin, pos_or_neg_sample=None):
+    def getReward(self, samples, training_bin, one_sample=False, pos_or_neg_sample=None):
         """
         Get word-level reward and sentence-level reward of samples.
         """
@@ -39,22 +39,27 @@ class BERT_sentiment(LSTMGenerator):
         word_reward = F.nll_loss(pred, target.view(-1), reduction='none').view(batch_size, -1)
         sentence_reward = torch.mean(word_reward, dim=-1, keepdim=True)
         """
-        samples = samples.tolist()
-        samples = [[self.bpe.decode(sample)] for sample in samples]
-        sentiments = self.sentiment(samples)
 
+        if one_sample:
+            samples = self.bpe.decode(samples.tolist())
+        else:
+            samples = samples.tolist()
+            samples = [[self.bpe.decode(sample)] for sample in samples]
+        # TODO: would be better to use the input as a tensor to be
+        # able to use the gpu
+
+        sentiments = self.sentiment(samples)
         """
-        print("SAMPLES_sentiment")
-        print(sample)
-        """
-        """
-        print("SENTENCE_reward")
+        print("SAMPLES_BERT")
+        print(samples)
+        print("SENTIMENTS")
         print(sentiments)
         """
 
+
         label_map = {'NEGATIVE': 0.0, 'POSITIVE': 1.0}
         sentence_sentiment = torch.tensor([self.score_token(sentiment['score'], sentiment['label']) for sentiment in
-                                         sentiments], requires_grad=True)
+                                         sentiments], requires_grad=False)
         #sentence_sentiment = sentence_rewards.view(1, len(sentence_rewards))
         # maybe better to give rewards for only this length and not cfg.max_seqlen
         #word_rewards = [sentence_rewards for i in range(len(samples[0]))]
