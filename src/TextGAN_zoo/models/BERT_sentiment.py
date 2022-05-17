@@ -8,6 +8,7 @@
 # Copyrights (C) 2018. All Rights Reserved.
 
 import torch
+from torch import nn
 import torch.nn.functional as F
 
 import config as cfg
@@ -29,50 +30,70 @@ class BERT_sentiment(LSTMGenerator):
         self.model_name = f"cardiffnlp/twitter-roberta-base-sentiment-latest"
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
         self.config = AutoConfig.from_pretrained(self.model_name)
-        self.sentiment= AutoModelForSequenceClassification.from_pretrained(MODEL)
+        self.sentiment = AutoModelForSequenceClassification.from_pretrained(self.model_name)
+        self.softmax = nn.Softmax(dim=1)
     def score_token(self, score, label):
         if label == 'POSITIVE':
             return score
         else:
             return 1.0 - score
+
+    def sentiment_to_score(self, scores):
+        """
+        Works with score with 3 classes (neg, neutral, pos)
+        """
+        rewards = []
+        for score in list(scores):
+            neutral_score = score[1].item() * 0.5
+            positive_score = score[2].item() * 1
+            rewards.append(neutral_score + positive_score)
+        return rewards
+    def preprocess(self, text):
+        new_text = []
+        for t in text.split(" "):
+            t = '@user' if t.startswith('@') and len(t) > 1 else t
+            t = 'http' if t.startswith('http') else t
+            new_text.append(t)
+        return " ".join(new_text)
+
     def getReward(self, samples, training_bin, one_sample=False, pos_or_neg_sample=None):
         """
         Get word-level reward and sentence-level reward of samples.
         """
 
-
         """
         word_reward = F.nll_loss(pred, target.view(-1), reduction='none').view(batch_size, -1)
         sentence_reward = torch.mean(word_reward, dim=-1, keepdim=True)
         """
-
-        if one_sample:
-            samples = self.bpe.decode(samples.tolist())
-        else:
-            samples = samples.tolist()
-            samples = [[self.bpe.decode(sample)] for sample in samples]
-        # TODO: would be better to use the input as a tensor to be
-        # able to use the gpu
-        encoded_input = self.tokenizer(samples, return_tensors='pt')
-        output = self.sentiment(**encoded_input)
-        scores = output[0][0].detach().numpy()
-        scores = softmax(scores)
-        ranking = np.argsort(scores)
-        ranking = ranking[::-1]
-        for i in range(scores.shape[0]):
-            l = self.config.id2label[ranking[i]]
-            s = scores[ranking[i]]
-            print(f"{i + 1}) {l} {np.round(float(s), 4)}")
-
-        sentence_sentiment = None
+        with torch.no_grad():
+            if one_sample:
+                samples = self.bpe.decode(samples.tolist())
+            else:
+                samples = samples.tolist()
+                samples = [[self.preprocess(self.bpe.decode(sample))] for sample in samples]
+            # TODO: would be better to use the input as a tensor to be
+            # able to use the gpu
+            text = ["I love you so much my darling, ever since I first saw you", "No I don't think so"]
+            encoded_input = self.tokenizer(text, return_tensors='pt', padding=True)
+            if cfg.CUDA:
+                encoded_input['input_ids'] = encoded_input['input_ids'].cuda()
+                encoded_input['attention_mask'] = encoded_input['attention_mask'].cuda()
+            output = self.sentiment(**encoded_input)
+            print("output[0]")
+            print(output[0])
+            score_pt_large = self.softmax(output[0])
+            print("score_pt_large")
+            print(score_pt_large)
+            sentences_reward = self.sentiment_to_score(score_pt_large)
+            print("sentences_reward")
+            print(sentences_reward)
+            sentence_sentiment = None
         """
         print("SAMPLES_BERT")
         print(samples)
         print("SENTIMENTS")
         print(sentiments)
         """
-
-        
 
         """
         label_map = {'NEGATIVE': 0.0, 'POSITIVE': 1.0}
