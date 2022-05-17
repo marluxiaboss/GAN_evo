@@ -104,12 +104,11 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             self.sig.update()
             if self.sig.adv_sig:
 
-                """
+
                 if adv_epoch == 0:
                     rating_bin = self.sample_sentiment()
                 else:
-                """
-                rating_bin = self.adv_train_generator(cfg.ADV_g_step)  # Generator
+                    rating_bin = self.adv_train_generator(cfg.ADV_g_step)  # Generator
                 self.log.info("RATING_BINS:EPOCH{}".format(adv_epoch))
                 self.log.info(rating_bin)
                 if adv_epoch % cfg.adv_log_step == 0 or adv_epoch == cfg.ADV_train_epoch - 1:
@@ -135,7 +134,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         Function to be called before training to get an estimate of the sentiments of the generated sentences.
         """
 
-        training_bin = [0 for i in range(2)]
+        training_bin = [0 for i in range(3)]
         data_loader = self.train_data.loader
         for count, data in enumerate(data_loader):
             inp = data['input']
@@ -205,8 +204,8 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
                 word_sentiments = word_sentiments.cuda()
                 target_sentiments = target_sentiments.cuda()
             # loss = nn.MSELoss()
-            #loss = nn.L1Loss()
-            loss = nn.BCEWithLogitsLoss()
+            loss = nn.L1Loss()
+            #loss = nn.BCEWithLogitsLoss()
             #loss = nn.CrossEntropyLoss()
             adv_loss = loss(word_sentiments, target_sentiments)
             """
