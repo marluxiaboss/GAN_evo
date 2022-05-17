@@ -48,7 +48,7 @@ class BERT_sentiment(LSTMGenerator):
         # TODO: would be better to use the input as a tensor to be
         # able to use the gpu
 
-        sentiments = self.sentiment(samples)
+        sentiments = self.sentiment(samples, truncation=True)
         """
         print("SAMPLES_BERT")
         print(samples)

@@ -103,11 +103,12 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             self.log.info('-----\nADV EPOCH %d\n-----' % adv_epoch)
             self.sig.update()
             if self.sig.adv_sig:
+
                 """
                 if adv_epoch == 0:
                     rating_bin = self.sample_sentiment()
-
-                else:"""
+                else:
+                """
                 rating_bin = self.adv_train_generator(cfg.ADV_g_step)  # Generator
                 self.log.info("RATING_BINS:EPOCH{}".format(adv_epoch))
                 self.log.info(rating_bin)
@@ -132,19 +133,29 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
     def sample_sentiment(self):
         """
         Function to be called before training to get an estimate of the sentiments of the generated sentences.
-        TODO: use this function with the whole dataset and call it every epoch to compute the sentiment_bins.
         """
-        training_bin = [0 for i in range(2)]
 
-        for step in range(cfg.ADV_g_step):
-            inp = self.train_data.random_batch()['input']
+        training_bin = [0 for i in range(2)]
+        data_loader = self.train_data.loader
+        for count, data in enumerate(data_loader):
+            inp = data['input']
             if cfg.CUDA:
                 inp = inp.cuda()
-            for i in range(inp.size()[0]):
-                inp_sample = inp[i, :].view(1, len(inp[i, :]))
-                gen_sample, gen_sample_log_prob = self.gen.sample_teacher_forcing(inp_sample)
-                gen_sample = gen_sample[0, :]
-                self.dis.getReward(gen_sample, training_bin, one_sample=True)
+
+            # generate one sample from context
+            gen_samples, gen_sample_log_prob = self.gen.sample_teacher_forcing(inp)
+
+            # give reward to the generated sample
+            sentence_sentiment = self.dis.getReward(gen_samples, training_bin)
+
+            # display example of generation/reward for the first batch
+            if count == 0:
+                samples = gen_samples.tolist()
+                samples = [[self.bpe.decode(sample)] for sample in samples]
+                self.log.info("SAMPLES: ")
+                self.log.info(samples)
+                self.log.info("SENTIMENT_SCORE: {}".format(sentence_sentiment))
+
         return training_bin
 
     def adv_train_generator(self, g_step):
@@ -167,18 +178,21 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             if cfg.CUDA:
                 inp = inp.cuda()
 
+
             # generate one sample from context
             gen_samples, gen_sample_log_prob = self.gen.sample_teacher_forcing(inp)
 
             # give reward to the generated sample
             sentence_sentiment = self.dis.getReward(gen_samples, training_bin)
-            """
-            if i == 0:
-                sample = self.bpe.decode(gen_sample.tolist())
-                self.log.info("SAMPLE: ")
-                self.log.info(sample)
+
+            # display example of generation/reward for the first batch
+            if count == 0:
+                samples = gen_samples.tolist()
+                samples = [[self.bpe.decode(sample)] for sample in samples]
+                self.log.info("SAMPLES: ")
+                self.log.info(samples)
                 self.log.info("SENTIMENT_SCORE: {}".format(sentence_sentiment))
-            """
+
             if cfg.CUDA:
                 sentence_sentiment = sentence_sentiment.cuda()
 
@@ -191,9 +205,9 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
                 word_sentiments = word_sentiments.cuda()
                 target_sentiments = target_sentiments.cuda()
             # loss = nn.MSELoss()
-            loss = nn.L1Loss()
-            # loss = nn.BCEWithLogitsLoss()
-            # loss = nn.CrossEntropyLoss()
+            #loss = nn.L1Loss()
+            loss = nn.BCEWithLogitsLoss()
+            #loss = nn.CrossEntropyLoss()
             adv_loss = loss(word_sentiments, target_sentiments)
             """
             if i == 0:
@@ -213,8 +227,8 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             total_g_loss += adv_loss.item()
 
             # accumulate the gradient and update weights only when enough accumulated
-            # this allow us to have batch size = eg 32 and effectively 128
-            if count % 4 == 0:
+            # this allow us to have batch size = eg 16 and effectively 128
+            if count % 8 == 0:
                 self.optimize(self.gen_adv_opt, adv_loss, self.gen)
 
         # print("ADV LOSS FULL EPOCH")
@@ -271,8 +285,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
 
     def _save(self, phase, epoch):
         """Overwrites _save in instructor to add gpt2 tokenizer"""
-        if phase != 'ADV':
-            torch.save(self.gen.state_dict(), cfg.save_model_root + 'gen_{}_{:05d}.pt'.format(phase, epoch))
+        torch.save(self.gen.state_dict(), cfg.save_model_root + 'gen_{}_{:05d}.pt'.format(phase, epoch))
         save_sample_path = cfg.save_samples_root + 'samples_{}_{:05d}.txt'.format(phase, epoch)
         samples, _ = self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
                                               batch_size=50, temperature=0.7, top_k=40)
