@@ -15,15 +15,21 @@ from models.generator import LSTMGenerator
 from utils.bp_encoder import get_encoder
 from utils.data_loader import GenDataIter
 from transformers import pipeline
+from transformers import AutoModelForSequenceClassification
+from transformers import AutoTokenizer, AutoConfig
+import numpy as np
+from scipy.special import softmax
 
 
 class BERT_sentiment(LSTMGenerator):
     def __init__(self, embedding_dim, hidden_dim, vocab_size, max_seq_len, padding_idx, gpu=False):
         super(BERT_sentiment, self).__init__(embedding_dim, hidden_dim, vocab_size, max_seq_len, padding_idx, gpu)
-        self.name = 'dpgan_d'
-        self.sentiment = pipeline(task='sentiment-analysis')
+        self.name = 'roberta'
         self.bpe = get_encoder()
-
+        self.model_name = f"cardiffnlp/twitter-roberta-base-sentiment-latest"
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        self.config = AutoConfig.from_pretrained(self.model_name)
+        self.sentiment= AutoModelForSequenceClassification.from_pretrained(MODEL)
     def score_token(self, score, label):
         if label == 'POSITIVE':
             return score
@@ -47,8 +53,18 @@ class BERT_sentiment(LSTMGenerator):
             samples = [[self.bpe.decode(sample)] for sample in samples]
         # TODO: would be better to use the input as a tensor to be
         # able to use the gpu
+        encoded_input = self.tokenizer(samples, return_tensors='pt')
+        output = self.sentiment(**encoded_input)
+        scores = output[0][0].detach().numpy()
+        scores = softmax(scores)
+        ranking = np.argsort(scores)
+        ranking = ranking[::-1]
+        for i in range(scores.shape[0]):
+            l = self.config.id2label[ranking[i]]
+            s = scores[ranking[i]]
+            print(f"{i + 1}) {l} {np.round(float(s), 4)}")
 
-        sentiments = self.sentiment(samples, truncation=True)
+        sentence_sentiment = None
         """
         print("SAMPLES_BERT")
         print(samples)
@@ -56,7 +72,9 @@ class BERT_sentiment(LSTMGenerator):
         print(sentiments)
         """
 
+        
 
+        """
         label_map = {'NEGATIVE': 0.0, 'POSITIVE': 1.0}
         sentence_sentiment = torch.tensor([self.score_token(sentiment['score'], sentiment['label']) for sentiment in
                                          sentiments], requires_grad=False)
@@ -67,5 +85,6 @@ class BERT_sentiment(LSTMGenerator):
             training_bin[int(label_map[sentiment['label']])] += 1
         #print("SENTENCE_SENTIMENT")
         #print(sentence_sentiment)
+        """
         return sentence_sentiment
 
