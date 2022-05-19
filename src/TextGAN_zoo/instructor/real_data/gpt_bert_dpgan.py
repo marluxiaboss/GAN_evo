@@ -104,7 +104,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             self.sig.update()
             if self.sig.adv_sig:
 
-
+                """
                 if adv_epoch == 0:
                     rating_bin = self.sample_sentiment()
                 else:
@@ -118,7 +118,8 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
                     self.rating_bins.append(rating_bin)
                 if adv_epoch == 7:
                     visual.training_plots.plot_ratings(self.rating_bins)
-
+                """
+                self.test_model_on_dataset(adv_epoch)
             else:
                 self.log.info('>>> Stop by adv_signal! Finishing adversarial training...')
                 break
@@ -128,7 +129,23 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
 
         self._run()
         pass
-
+    
+    def test_model_on_dataset(self, adv_epoch):
+        """
+        Compare GPT-2 without finetuning to GPT-2 with finetuning on a particular dataset.
+        """
+        if adv_epoch == 0:
+            rating_bin = self.sample_sentiment()
+        if adv_epoch == 1:
+            self.log.info('Load fine_tuned nice generator: {}'.format(cfg.pretrained_gen_path))
+            self.gen.load_state_dict(torch.load(cfg.pretrained_gen_path, map_location='cuda:{}'.format(cfg.device)))
+            rating_bin = self.sample_sentiment()
+        if adv_epoch == 2:
+            visual.training_plots.plot_ratings_compared(self.rating_bins)
+        self.log.info("RATING_BINS:EPOCH{}".format(adv_epoch))
+        self.log.info(rating_bin)
+        if adv_epoch % 1 == 0:
+            self.rating_bins.append(rating_bin)
     def sample_sentiment(self):
         """
         Function to be called before training to get an estimate of the sentiments of the generated sentences.
