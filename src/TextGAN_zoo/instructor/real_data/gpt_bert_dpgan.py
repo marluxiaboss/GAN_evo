@@ -42,9 +42,6 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         pretrained_model.cuda()
         # summary(pretrained_model, (1,14))
         self.gen = helpers.load_weight(self.gen, pretrained_model.state_dict())
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.gen.to(device)
-        self.dis.to(device)
         self.init_model()
 
         # Optimizer
@@ -92,7 +89,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         """
         if cfg.CUDA:
             self.gen = self.gen.cuda()
-            self.dis = self.dis.cuda()
+            #self.dis = self.dis.cuda()
 
     def _run(self):
         # ===ADVERSARIAL TRAINING===
@@ -103,12 +100,13 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             self.log.info('-----\nADV EPOCH %d\n-----' % adv_epoch)
             self.sig.update()
             if self.sig.adv_sig:
-
                 """
                 if adv_epoch == 0:
                     rating_bin = self.sample_sentiment()
                 else:
-                    rating_bin = self.adv_train_generator(cfg.ADV_g_step)  # Generator
+                """
+                """
+                rating_bin = self.adv_train_generator(cfg.ADV_g_step)  # Generator
                 self.log.info("RATING_BINS:EPOCH{}".format(adv_epoch))
                 self.log.info(rating_bin)
                 if adv_epoch % cfg.adv_log_step == 0 or adv_epoch == cfg.ADV_train_epoch - 1:
@@ -129,14 +127,14 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
 
         self._run()
         pass
-    
+
     def test_model_on_dataset(self, adv_epoch):
         """
         Compare GPT-2 without finetuning to GPT-2 with finetuning on a particular dataset.
         """
-        if adv_epoch == 0:
-            rating_bin = self.sample_sentiment()
         if adv_epoch == 1:
+            rating_bin = self.sample_sentiment()
+        if adv_epoch == 0:
             self.log.info('Load fine_tuned nice generator: {}'.format(cfg.pretrained_gen_path))
             self.gen.load_state_dict(torch.load(cfg.pretrained_gen_path, map_location='cuda:{}'.format(cfg.device)))
             rating_bin = self.sample_sentiment()
@@ -181,7 +179,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         """
         total_g_loss = 0
 
-        training_bin = [0 for i in range(2)]
+        training_bin = [0 for i in range(3)]
         data_loader = self.train_data.loader
         self.gen_adv_opt.zero_grad()
         for count, data in enumerate(data_loader):
@@ -244,11 +242,11 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
 
             # accumulate the gradient and update weights only when enough accumulated
             # this allow us to have batch size = eg 16 and effectively 128
-            if count % 8 == 0:
+            if count % 16 == 0:
                 self.optimize(self.gen_adv_opt, adv_loss, self.gen)
-
         # print("ADV LOSS FULL EPOCH")
         # print(total_g_loss / g_step)
+
 
         self.log.info("PARAMS")
         counter = 0
@@ -258,7 +256,6 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             counter += 1
             if counter > 60:
                 break
-
         # ===Test===
         self.log.info(
             '[ADV-GEN]: g_loss = %.4f, %s' % (total_g_loss / (g_step * cfg.batch_size), self.cal_metrics(fmt_str=True)))
