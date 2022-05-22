@@ -11,6 +11,7 @@ import json
 
 import torch
 import torch.optim as optim
+import transformers
 from transformers import GPT2Model, GPT2Tokenizer, get_linear_schedule_with_warmup
 
 import config as cfg
@@ -50,11 +51,12 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         #self.gen_adv_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
         # most default parameters for AdamW should be good
         # otw. look at https://github.com/huggingface/transformers/blob/main/src/transformers/training_args.py
-        self.gen_adv_opt = optim.AdamW(self.gen.parameters(), lr=5e-5, weight_decay=0 )
+        #self.gen_adv_opt = optim.AdamW(self.gen.parameters(), lr=5e-5, weight_decay=0 )
+        self.gen_adv_opt = transformers.AdamW(self.gen.parameters(), lr=5e-5)
         self.dis_opt = optim.Adam(self.dis.parameters(), lr=cfg.dis_lr)
-        #self.scheduler = get_linear_schedule_with_warmup(
-        #    self.gen_adv_opt, num_warmup_steps=200,  num_training_steps=-1
-        #)
+        self.scheduler = get_linear_schedule_with_warmup(
+            self.gen_adv_opt, num_warmup_steps=0,  num_training_steps=cfg.batch_size * 32
+        )
         # Tokenizer for the pretrained gpt2
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
         self.bpe = get_encoder()
@@ -121,6 +123,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
                     self.rating_bins.append(rating_bin)
                 if adv_epoch == 7:
                     visual.training_plots.plot_ratings(self.rating_bins)
+
                 #self.test_model_on_dataset(adv_epoch)
             else:
                 self.log.info('>>> Stop by adv_signal! Finishing adversarial training...')
@@ -136,9 +139,9 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         """
         Compare GPT-2 without finetuning to GPT-2 with finetuning on a particular dataset.
         """
-        if adv_epoch == 1:
-            rating_bin = self.sample_sentiment()
         if adv_epoch == 0:
+            rating_bin = self.sample_sentiment()
+        if adv_epoch == 1:
             self.log.info('Load fine_tuned nice generator: {}'.format(cfg.pretrained_gen_path))
             self.gen.load_state_dict(torch.load(cfg.pretrained_gen_path, map_location='cuda:{}'.format(cfg.device)))
             rating_bin = self.sample_sentiment()
@@ -248,10 +251,10 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             # this allow us to have batch size = eg 16 and effectively 128
             if count % 32 == 0:
                 self.optimize(self.gen_adv_opt, adv_loss, self.gen)
+                self.scheduler.step()
         # print("ADV LOSS FULL EPOCH")
         # print(total_g_loss / g_step)
 
-        #self.scheduler.step()
         self.log.info("PARAMS")
         counter = 0
         for param in self.gen.parameters():
