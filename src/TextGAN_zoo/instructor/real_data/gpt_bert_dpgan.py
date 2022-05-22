@@ -11,7 +11,7 @@ import json
 
 import torch
 import torch.optim as optim
-from transformers import GPT2Model, GPT2Tokenizer
+from transformers import GPT2Model, GPT2Tokenizer, get_linear_schedule_with_warmup
 
 import config as cfg
 from instructor.real_data.instructor import SelfAttentionInstructor
@@ -46,9 +46,15 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
 
         # Optimizer
         self.gen_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
-        self.gen_adv_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
+        #self.gen_adv_opt = optim.SGD(self.gen.parameters(), lr=cfg.gen_lr)
+        #self.gen_adv_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
+        # most default parameters for AdamW should be good
+        # otw. look at https://github.com/huggingface/transformers/blob/main/src/transformers/training_args.py
+        self.gen_adv_opt = optim.AdamW(self.gen.parameters(), lr=5e-5, weight_decay=0 )
         self.dis_opt = optim.Adam(self.dis.parameters(), lr=cfg.dis_lr)
-
+        #self.scheduler = get_linear_schedule_with_warmup(
+        #    self.gen_adv_opt, num_warmup_steps=200,  num_training_steps=-1
+        #)
         # Tokenizer for the pretrained gpt2
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
         self.bpe = get_encoder()
@@ -105,19 +111,17 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
                     rating_bin = self.sample_sentiment()
                 else:
                 """
-                """
                 rating_bin = self.adv_train_generator(cfg.ADV_g_step)  # Generator
                 self.log.info("RATING_BINS:EPOCH{}".format(adv_epoch))
                 self.log.info(rating_bin)
-                if adv_epoch % cfg.adv_log_step == 0 or adv_epoch == cfg.ADV_train_epoch - 1:
+                if (adv_epoch + 1) % cfg.adv_log_step == 0 or adv_epoch == cfg.ADV_train_epoch - 1:
                     if cfg.if_save and not cfg.if_test:
                         self._save('ADV', adv_epoch)
                 if adv_epoch % 1 == 0:
                     self.rating_bins.append(rating_bin)
                 if adv_epoch == 7:
                     visual.training_plots.plot_ratings(self.rating_bins)
-                """
-                self.test_model_on_dataset(adv_epoch)
+                #self.test_model_on_dataset(adv_epoch)
             else:
                 self.log.info('>>> Stop by adv_signal! Finishing adversarial training...')
                 break
@@ -218,8 +222,8 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             if cfg.CUDA:
                 word_sentiments = word_sentiments.cuda()
                 target_sentiments = target_sentiments.cuda()
-            # loss = nn.MSELoss()
-            loss = nn.L1Loss()
+            loss = nn.MSELoss()
+            #loss = nn.L1Loss()
             #loss = nn.BCEWithLogitsLoss()
             #loss = nn.CrossEntropyLoss()
             adv_loss = loss(word_sentiments, target_sentiments)
@@ -242,12 +246,12 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
 
             # accumulate the gradient and update weights only when enough accumulated
             # this allow us to have batch size = eg 16 and effectively 128
-            if count % 16 == 0:
+            if count % 32 == 0:
                 self.optimize(self.gen_adv_opt, adv_loss, self.gen)
         # print("ADV LOSS FULL EPOCH")
         # print(total_g_loss / g_step)
 
-
+        #self.scheduler.step()
         self.log.info("PARAMS")
         counter = 0
         for param in self.gen.parameters():
@@ -311,4 +315,5 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
     def optimize(opt, loss, model=None, retain_graph=False):
         # loss.backward(retain_graph=retain_graph)
         opt.step()
+        #torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         opt.zero_grad()

@@ -65,7 +65,7 @@ def reduce_dataset(dataset_path, dataset_dest):
 
     # get all sentences of the dataset in a list
     original_sentences = text_process.get_tokenlized(dataset_path)
-    for i in range(100000):
+    for i in range(10000):
         kept_sentences.append(original_sentences[i])
     text_process.write_tokens(dataset_dest, kept_sentences)
 
@@ -74,4 +74,4 @@ def reduce_dataset(dataset_path, dataset_dest):
 #simple_sentences_rotation("image_coco.txt", "image_coco_with_random_rotations.txt",
 #                          keep_original=False, uniform_rotation=False, cut_a=True)
 #cut_first_token("image_coco.txt", "image_coco_with_no_a")
-reduce_dataset("emnlp_news.txt", "emnlp_news_small.txt")
+reduce_dataset("emnlp_news.txt", "emnlp_news_tiny.txt")
