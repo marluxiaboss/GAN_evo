@@ -20,10 +20,10 @@ class BERT_fake(LSTMGenerator):
         # Define pretrained tokenizer and model
         self.model_name = "bert-base-uncased"
         self.tokenizer = BertTokenizer.from_pretrained(self.model_name)
-        self.model = BertForSequenceClassification.from_pretrained(sefl.model_name, num_labels=2)
+        self.model = BertForSequenceClassification.from_pretrained(self.model_name, num_labels=2)
 
         # Initialize the dataset for training
-        data = pd.read_csv("train.csv")
+        data = pd.read_csv("'dataset/image_coco_fake_true.csv")
 
         # ----- 1. Preprocess data -----#
         # Preprocess data

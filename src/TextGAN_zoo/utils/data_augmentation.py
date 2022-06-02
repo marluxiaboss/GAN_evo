@@ -75,16 +75,21 @@ def create_fake_true_dataset(fake_data_path, true_data_path):
     """
     Creates dataset for the gpt_bert GAN from true and fake data labeled.
     """
-    fake_sentences = text_process.get_tokenlized(fake_data_path)
-    true_sentences = text_process.get_tokenlized(true_data_path)
+    #fake_sentences = text_process.get_tokenlized(fake_data_path)
+    #true_sentences = text_process.get_tokenlized(true_data_path)
+    fake_sentences = []
+    with open(fake_data_path) as fake_data:
+        for row in fake_data:
+            fake_sentences.append(row)
+    true_sentences = []
+    with open(true_data_path) as true_data:
+        for row in true_data:
+            true_sentences.append(row)
 
     header = ['text', 'label']
     data = []
     for sentence in fake_sentences:
         # fake has the 0 label and true data has 1 label
-        print("SENTENCE")
-        print(sentence)
-        print("-----------------------------------")
         data.append([sentence, 0])
 
     for sentence in true_sentences:
@@ -105,5 +110,5 @@ def create_fake_true_dataset(fake_data_path, true_data_path):
 #simple_sentences_rotation("image_coco.txt", "image_coco_with_random_rotations.txt",
 #                          keep_original=False, uniform_rotation=False, cut_a=True)
 #cut_first_token("image_coco.txt", "image_coco_with_no_a")
-reduce_dataset("emnlp_news.txt", "emnlp_news_tiny.txt")
-#create_fake_true_dataset("image_coco_fake.txt", "image_coco.txt")
+#reduce_dataset("emnlp_news.txt", "emnlp_news_tiny.txt")
+create_fake_true_dataset("image_coco_fake.txt", "image_coco.txt")
