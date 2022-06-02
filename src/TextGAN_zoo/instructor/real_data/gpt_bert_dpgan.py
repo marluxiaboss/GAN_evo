@@ -21,7 +21,7 @@ from models.GPT_2 import GPT_2
 from utils import helpers
 from utils.bp_encoder import get_encoder
 from utils.gpt2_data_loader import GenDataIter
-from utils.text_process import write_tokens, load_dict, tensor_to_tokens, tokens_to_tensor
+from utils.text_process import write_tokens, load_dict, tensor_to_tokens, tokens_to_tensor, text_process
 from torchvision import models
 from torchsummary import summary
 from torch import nn
@@ -112,10 +112,13 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             self.log.info('-----\nADV EPOCH %d\n-----' % adv_epoch)
             self.sig.update()
             if self.sig.adv_sig:
-                """
+
                 if adv_epoch == 0:
-                    rating_bin = self.sample_sentiment()
+                    #rating_bin = self.sample_sentiment()
+                    self.create_fake_dataset()
+                """
                 else:
+                """
                 """
                 rating_bin = self.adv_train_generator(cfg.ADV_g_step)  # Generator
                 self.log.info("RATING_BINS:EPOCH{}".format(adv_epoch))
@@ -130,6 +133,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
                     visual.training_plots.plot_ratings_20(self.rating_bins)
 
                 # self.test_model_on_dataset(adv_epoch)
+                """
             else:
                 self.log.info('>>> Stop by adv_signal! Finishing adversarial training...')
                 break
@@ -323,6 +327,25 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         # samples = [[self.tokenizer.decode(sample)] for sample in samples]
         samples = [[self.bpe.decode(sample)] for sample in samples]
         write_tokens(save_sample_path, samples)
+
+    def create_fake_dataset(self):
+        """
+        Function used to create a dataset of fake generated text using GPT-2 with
+        a particular dataset as context for generation.
+        """
+        data_loader = self.train_data.loader
+        fake_sentences = []
+        for count, data in enumerate(data_loader):
+            inp = data['input']
+            if cfg.CUDA:
+                inp = inp.cuda()
+
+            # generate one sample from context
+            samples = self.gen.sample_teacher_forcing(inp)
+            samples = samples.tolist()
+            samples = [self.preprocess(self.bpe.decode(sample)) for sample in samples]
+            fake_sentences.extend(samples)
+        text_process.write_tokens(cfg.save_samples_root + 'fake_dataset.txt', fake_sentences)
 
     @staticmethod
     def optimize(opt, loss, model=None, retain_graph=False):
