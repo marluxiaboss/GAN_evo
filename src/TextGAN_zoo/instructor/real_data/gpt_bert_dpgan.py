@@ -25,6 +25,7 @@ from utils.text_process import write_tokens, load_dict, tensor_to_tokens, tokens
 from torchvision import models
 from torchsummary import summary
 from torch import nn
+from utils import text_process
 
 import visual.training_plots
 
@@ -342,7 +343,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
 
             # generate one sample from context
             samples = self.gen.sample_teacher_forcing(inp)
-            samples = samples.tolist()
+            samples = samples[0].tolist()
             samples = [self.preprocess(self.bpe.decode(sample)) for sample in samples]
             fake_sentences.extend(samples)
         text_process.write_tokens(cfg.save_samples_root + 'fake_dataset.txt', fake_sentences)

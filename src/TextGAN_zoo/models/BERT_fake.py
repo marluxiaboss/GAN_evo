@@ -9,7 +9,10 @@ from transformers import EarlyStoppingCallback
 
 from models.generator import LSTMGenerator
 
-
+"""
+inspiration from:
+https://towardsdatascience.com/fine-tuning-pretrained-nlp-models-with-huggingfaces-trainer-6326a4456e7b
+"""
 class BERT_fake(LSTMGenerator):
     def __init__(self, embedding_dim, hidden_dim, vocab_size, max_seq_len, padding_idx, gpu=False):
         super(BERT_fake, self).__init__(embedding_dim, hidden_dim, vocab_size, max_seq_len, padding_idx, gpu)
@@ -24,8 +27,8 @@ class BERT_fake(LSTMGenerator):
 
         # ----- 1. Preprocess data -----#
         # Preprocess data
-        X = list(data["review"])
-        y = list(data["sentiment"])
+        X = list(data["text"])
+        y = list(data["label"])
         X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2)
         X_train_tokenized = self.tokenizer(X_train, padding=True, truncation=True, max_length=512)
         X_val_tokenized = self.tokenizer(X_val, padding=True, truncation=True, max_length=512)
@@ -53,8 +56,8 @@ class BERT_fake(LSTMGenerator):
             output_dir="output",
             evaluation_strategy="steps",
             eval_steps=500,
-            per_device_train_batch_size=8,
-            per_device_eval_batch_size=8,
+            per_device_train_batch_size=32,
+            per_device_eval_batch_size=32,
             num_train_epochs=1,
             seed=0,
             load_best_model_at_end=True,
@@ -83,6 +86,11 @@ class BERT_fake(LSTMGenerator):
 
         # Train pre-trained model
         self.trainer.train()
+        loss = self.trainer.evaluate()
+        print("LOSS")
+        print(loss)
+        y
+
 
 
 

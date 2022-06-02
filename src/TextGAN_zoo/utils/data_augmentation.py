@@ -1,6 +1,7 @@
 import random
 
 from utils import text_process
+import csv
 
 
 def simple_sentences_rotation(dataset_path, dataset_dest, keep_original=True,
@@ -67,7 +68,37 @@ def reduce_dataset(dataset_path, dataset_dest):
     original_sentences = text_process.get_tokenlized(dataset_path)
     for i in range(10000):
         kept_sentences.append(original_sentences[i])
+    print(kept_sentences)
     text_process.write_tokens(dataset_dest, kept_sentences)
+
+def create_fake_true_dataset(fake_data_path, true_data_path):
+    """
+    Creates dataset for the gpt_bert GAN from true and fake data labeled.
+    """
+    fake_sentences = text_process.get_tokenlized(fake_data_path)
+    true_sentences = text_process.get_tokenlized(true_data_path)
+
+    header = ['text', 'label']
+    data = []
+    for sentence in fake_sentences:
+        # fake has the 0 label and true data has 1 label
+        print("SENTENCE")
+        print(sentence)
+        print("-----------------------------------")
+        data.append([sentence, 0])
+
+    for sentence in true_sentences:
+        data.append([sentence, 1])
+
+    with open('image_coco_fake_true.csv', 'w', encoding='UTF8', newline='') as f:
+        writer = csv.writer(f)
+
+        # write the header
+        writer.writerow(header)
+
+        # write multiple rows
+        writer.writerows(data)
+
 
 # The idea will be to rename the new file to image_coco so that no code has to be modified
 #simple_sentences_rotation("image_coco.txt", "image_coco_with_rotations.txt")
@@ -75,3 +106,4 @@ def reduce_dataset(dataset_path, dataset_dest):
 #                          keep_original=False, uniform_rotation=False, cut_a=True)
 #cut_first_token("image_coco.txt", "image_coco_with_no_a")
 reduce_dataset("emnlp_news.txt", "emnlp_news_tiny.txt")
+#create_fake_true_dataset("image_coco_fake.txt", "image_coco.txt")
