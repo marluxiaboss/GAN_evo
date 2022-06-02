@@ -47,16 +47,20 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
 
         # Optimizer
         self.gen_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
-        #self.gen_adv_opt = optim.SGD(self.gen.parameters(), lr=cfg.gen_lr)
-        #self.gen_adv_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
+        # self.gen_adv_opt = optim.SGD(self.gen.parameters(), lr=cfg.gen_lr)
+        # self.gen_adv_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
         # most default parameters for AdamW should be good
         # otw. look at https://github.com/huggingface/transformers/blob/main/src/transformers/training_args.py
-        #self.gen_adv_opt = optim.AdamW(self.gen.parameters(), lr=5e-5, weight_decay=0 )
-        self.gen_adv_opt = transformers.AdamW(self.gen.parameters(), lr=5e-5)
+        self.gen_adv_opt = optim.AdamW(self.gen.parameters(), lr=cfg.gen_lr, weight_decay=0)
+        # self.gen_adv_opt = transformers.AdamW(self.gen.parameters(), lr=cfg.gen_lr)
         self.dis_opt = optim.Adam(self.dis.parameters(), lr=cfg.dis_lr)
+        # we want to warmup for one epoch(for coco dataset we need 10 mini-batches to have
+        # the whole dataset and here we test 20 epochs
+        """
         self.scheduler = get_linear_schedule_with_warmup(
-            self.gen_adv_opt, num_warmup_steps=0,  num_training_steps=cfg.batch_size * 32
+            self.gen_adv_opt, num_warmup_steps=10,  num_training_steps=10 * 20
         )
+        """
         # Tokenizer for the pretrained gpt2
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
         self.bpe = get_encoder()
@@ -97,7 +101,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         """
         if cfg.CUDA:
             self.gen = self.gen.cuda()
-            #self.dis = self.dis.cuda()
+            # self.dis = self.dis.cuda()
 
     def _run(self):
         # ===ADVERSARIAL TRAINING===
@@ -119,12 +123,13 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
                 if (adv_epoch + 1) % cfg.adv_log_step == 0 or adv_epoch == cfg.ADV_train_epoch - 1:
                     if cfg.if_save and not cfg.if_test:
                         self._save('ADV', adv_epoch)
-                if adv_epoch % 1 == 0:
+                if adv_epoch % 2 == 0:
                     self.rating_bins.append(rating_bin)
-                if adv_epoch == 7:
-                    visual.training_plots.plot_ratings(self.rating_bins)
+                if adv_epoch == 21:
+                    # visual.training_plots.plot_ratings(self.rating_bins)
+                    visual.training_plots.plot_ratings_20(self.rating_bins)
 
-                #self.test_model_on_dataset(adv_epoch)
+                # self.test_model_on_dataset(adv_epoch)
             else:
                 self.log.info('>>> Stop by adv_signal! Finishing adversarial training...')
                 break
@@ -151,6 +156,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         self.log.info(rating_bin)
         if adv_epoch % 1 == 0:
             self.rating_bins.append(rating_bin)
+
     def sample_sentiment(self):
         """
         Function to be called before training to get an estimate of the sentiments of the generated sentences.
@@ -199,7 +205,6 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             if cfg.CUDA:
                 inp = inp.cuda()
 
-
             # generate one sample from context
             gen_samples, gen_sample_log_prob = self.gen.sample_teacher_forcing(inp)
 
@@ -226,9 +231,9 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
                 word_sentiments = word_sentiments.cuda()
                 target_sentiments = target_sentiments.cuda()
             loss = nn.MSELoss()
-            #loss = nn.L1Loss()
-            #loss = nn.BCEWithLogitsLoss()
-            #loss = nn.CrossEntropyLoss()
+            # loss = nn.L1Loss()
+            # loss = nn.BCEWithLogitsLoss()
+            # loss = nn.CrossEntropyLoss()
             adv_loss = loss(word_sentiments, target_sentiments)
             """
             if i == 0:
@@ -251,7 +256,12 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             # this allow us to have batch size = eg 16 and effectively 128
             if count % 32 == 0:
                 self.optimize(self.gen_adv_opt, adv_loss, self.gen)
+                """
                 self.scheduler.step()
+                print("LR")
+                print(self.scheduler.get_last_lr())
+                """
+
         # print("ADV LOSS FULL EPOCH")
         # print(total_g_loss / g_step)
 
@@ -317,6 +327,6 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
     @staticmethod
     def optimize(opt, loss, model=None, retain_graph=False):
         # loss.backward(retain_graph=retain_graph)
+        # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         opt.step()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         opt.zero_grad()
