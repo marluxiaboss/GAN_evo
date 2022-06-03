@@ -9,6 +9,7 @@ from transformers import BertTokenizer, BertForSequenceClassification
 from transformers import EarlyStoppingCallback
 
 from models.generator import LSTMGenerator
+from utils.bp_encoder import get_encoder
 
 """
 inspiration from:
@@ -16,12 +17,28 @@ https://towardsdatascience.com/fine-tuning-pretrained-nlp-models-with-huggingfac
 """
 
 
+# Create torch dataset
+class Dataset(torch.utils.data.Dataset):
+    def __init__(self, encodings, labels=None):
+        self.encodings = encodings
+        self.labels = labels
+
+    def __getitem__(self, idx):
+        item = {key: torch.tensor(val[idx]) for key, val in self.encodings.items()}
+        if self.labels:
+            item["labels"] = torch.tensor(self.labels[idx])
+        return item
+
+    def __len__(self):
+        return len(self.encodings["input_ids"])
+
 class BERT_fake:
     def __init__(self):
         # Define pretrained tokenizer and model
         self.model_name = "bert-base-uncased"
         self.tokenizer = BertTokenizer.from_pretrained(self.model_name)
         self.model = BertForSequenceClassification.from_pretrained(self.model_name, num_labels=2)
+        self.bpe = get_encoder()
         # Initialize the dataset for training
         data = pd.read_csv('dataset/image_coco_fake_true.csv')
 
@@ -33,20 +50,7 @@ class BERT_fake:
         X_train_tokenized = self.tokenizer(X_train, padding=True, truncation=True, max_length=512)
         X_val_tokenized = self.tokenizer(X_val, padding=True, truncation=True, max_length=512)
 
-        # Create torch dataset
-        class Dataset(torch.utils.data.Dataset):
-            def __init__(self, encodings, labels=None):
-                self.encodings = encodings
-                self.labels = labels
 
-            def __getitem__(self, idx):
-                item = {key: torch.tensor(val[idx]) for key, val in self.encodings.items()}
-                if self.labels:
-                    item["labels"] = torch.tensor(self.labels[idx])
-                return item
-
-            def __len__(self):
-                return len(self.encodings["input_ids"])
 
         self.train_dataset = Dataset(X_train_tokenized, y_train)
         self.val_dataset = Dataset(X_val_tokenized, y_val)
@@ -89,7 +93,30 @@ class BERT_fake:
         print("LOSS")
         print(loss)
 
-    def getReward(samples, self):
+    def getReward(self, training_bin, samples):
+        samples = samples.tolist()
+        samples = [self.bpe.decode(sample) for sample in samples]
         X_test_tokenized = self.tokenizer(samples, padding=True, truncation=True, max_length=512)
-        self.trainer.predict()
+        test_dataset = Dataset(X_test_tokenized)
+
+        # Make prediction
+        raw_pred, _, _ = self.trainer.predict(test_dataset)
+
+        # Preprocess raw predictions
+        y_pred = np.argmax(raw_pred, axis=1)
+        print("SAMPLES")
+        print(samples)
+        print("y_pred")
+        print(y_pred)
+        print("y_raw")
+        print(raw_pred)
+
+        #fill the bins for the histogram
+        for y in y_pred:
+            training_bin[y] += 1
+
+        sentence_rewards = torch.tensor(y_pred, requires_grad=False)
+        return sentence_rewards
+
+
 
