@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import config as cfg
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
 import torch
@@ -13,17 +14,16 @@ from models.generator import LSTMGenerator
 inspiration from:
 https://towardsdatascience.com/fine-tuning-pretrained-nlp-models-with-huggingfaces-trainer-6326a4456e7b
 """
-class BERT_fake(LSTMGenerator):
-    def __init__(self, embedding_dim, hidden_dim, vocab_size, max_seq_len, padding_idx, gpu=False):
-        super(BERT_fake, self).__init__(embedding_dim, hidden_dim, vocab_size, max_seq_len, padding_idx, gpu)
 
+
+class BERT_fake:
+    def __init__(self):
         # Define pretrained tokenizer and model
         self.model_name = "bert-base-uncased"
         self.tokenizer = BertTokenizer.from_pretrained(self.model_name)
         self.model = BertForSequenceClassification.from_pretrained(self.model_name, num_labels=2)
-
         # Initialize the dataset for training
-        data = pd.read_csv("'dataset/image_coco_fake_true.csv")
+        data = pd.read_csv('dataset/image_coco_fake_true.csv')
 
         # ----- 1. Preprocess data -----#
         # Preprocess data
@@ -56,9 +56,9 @@ class BERT_fake(LSTMGenerator):
             output_dir="output",
             evaluation_strategy="steps",
             eval_steps=500,
-            per_device_train_batch_size=32,
-            per_device_eval_batch_size=32,
-            num_train_epochs=1,
+            per_device_train_batch_size=cfg.batch_size,
+            per_device_eval_batch_size=cfg.batch_size,
+            num_train_epochs=cfg.d_epoch,
             seed=0,
             load_best_model_at_end=True,
         )
@@ -83,16 +83,13 @@ class BERT_fake(LSTMGenerator):
         return {"accuracy": accuracy, "precision": precision, "recall": recall, "f1": f1}
 
     def fake_detection_train(self):
-
         # Train pre-trained model
         self.trainer.train()
         loss = self.trainer.evaluate()
         print("LOSS")
         print(loss)
-        y
 
-
-
-
-
+    def getReward(samples, self):
+        X_test_tokenized = self.tokenizer(samples, padding=True, truncation=True, max_length=512)
+        self.trainer.predict()
 

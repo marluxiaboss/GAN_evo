@@ -11,6 +11,7 @@ from __future__ import print_function
 import argparse
 
 import config as cfg
+from instructor.real_data.gpt_bert_gan_fake import gpt_bert_gan_fake
 from instructor.real_data.gpt_bert_dpgan import GPT_BERT_DPGAN
 from utils.text_process import load_test_dict, text_process
 
@@ -169,6 +170,7 @@ if __name__ == '__main__':
         'dpgan': DPGANInstructor,
         'sa_dpgan': SADPGANInstructor,
         'gpt_bert_dpgan': GPT_BERT_DPGAN,
+        'gpt_bert_gan_fake': gpt_bert_gan_fake,
         'relgan': RelGANInstructor,
         'sentigan': SentiGANInstructor,
         'evogan': EvoGANInstructor,

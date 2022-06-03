@@ -16,6 +16,7 @@ from transformers import GPT2Model, GPT2Tokenizer, get_linear_schedule_with_warm
 
 import config as cfg
 from instructor.real_data.instructor import SelfAttentionInstructor
+from models.BERT_fake import BERT_fake
 from models.BERT_sentiment import BERT_sentiment
 from models.GPT_2 import GPT_2
 from utils import helpers
@@ -30,14 +31,11 @@ from utils import text_process
 import visual.training_plots
 
 
-class GPT_BERT_DPGAN(SelfAttentionInstructor):
+class gpt_bert_gan_fake(SelfAttentionInstructor):
     def __init__(self, opt):
-        super(GPT_BERT_DPGAN, self).__init__(opt)
-
-        # generator, discriminator
+        super(gpt_bert_gan_fake, self).__init__(opt)
+        self.dis = BERT_fake()
         self.gen = GPT_2()
-        self.dis = BERT_sentiment(cfg.gen_embed_dim, cfg.gen_hidden_dim, cfg.vocab_size, cfg.max_seq_len,
-                                  cfg.padding_idx, gpu=cfg.CUDA)
 
         # Load weights from huggingface GPT_2 transformer class
         pretrained_model = GPT2Model.from_pretrained("gpt2")
@@ -45,6 +43,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         # summary(pretrained_model, (1,14))
         self.gen = helpers.load_weight(self.gen, pretrained_model.state_dict())
         self.init_model()
+
 
         # Optimizer
         self.gen_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
@@ -107,43 +106,33 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
     def _run(self):
         # ===ADVERSARIAL TRAINING===
         self.log.info('Starting Adversarial Training...')
-        self.log.info('Initial generator: %s' % (self.cal_metrics(fmt_str=True)))
+        #self.log.info('Initial generator: %s' % (self.cal_metrics(fmt_str=True)))
+
+        for dis_step in range(cfg.d_step):
+            self.dis.fake_detection_train()
 
         for adv_epoch in range(cfg.ADV_train_epoch):
             self.log.info('-----\nADV EPOCH %d\n-----' % adv_epoch)
             self.sig.update()
             if self.sig.adv_sig:
-
-                if adv_epoch == 0:
-                    #rating_bin = self.sample_sentiment()
-                    self.create_fake_dataset()
-                """
-                else:
-                """
-                """
                 rating_bin = self.adv_train_generator(cfg.ADV_g_step)  # Generator
-                self.log.info("RATING_BINS:EPOCH{}".format(adv_epoch))
+                self.log.info("FAKE_BINS:EPOCH{}".format(adv_epoch))
                 self.log.info(rating_bin)
                 if (adv_epoch + 1) % cfg.adv_log_step == 0 or adv_epoch == cfg.ADV_train_epoch - 1:
                     if cfg.if_save and not cfg.if_test:
                         self._save('ADV', adv_epoch)
-                if adv_epoch % 2 == 0:
+                if adv_epoch % 1 == 0:
                     self.rating_bins.append(rating_bin)
-                if adv_epoch == 21:
+                if adv_epoch == 11:
                     # visual.training_plots.plot_ratings(self.rating_bins)
                     visual.training_plots.plot_ratings_20(self.rating_bins)
 
                 # self.test_model_on_dataset(adv_epoch)
-                """
             else:
                 self.log.info('>>> Stop by adv_signal! Finishing adversarial training...')
                 break
 
-    def _test(self):
-        print('>>> Begin test...')
 
-        self._run()
-        pass
 
     def test_model_on_dataset(self, adv_epoch):
         """
@@ -167,7 +156,7 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         Function to be called before training to get an estimate of the sentiments of the generated sentences.
         """
 
-        training_bin = [0 for i in range(3)]
+        training_bin = [0 for i in range(2)]
         data_loader = self.train_data.loader
         for count, data in enumerate(data_loader):
             inp = data['input']
@@ -197,16 +186,11 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         """
         total_g_loss = 0
 
-        training_bin = [0 for i in range(3)]
+        training_bin = [0 for i in range(2)]
         data_loader = self.train_data.loader
         self.gen_adv_opt.zero_grad()
         for count, data in enumerate(data_loader):
             inp = data['input']
-            """
-            print("BATCH_SIZE")
-            print("iteration{}, size:{}".format(count,
-                                                data_loader.batch_size))
-            """
             if cfg.CUDA:
                 inp = inp.cuda()
 
