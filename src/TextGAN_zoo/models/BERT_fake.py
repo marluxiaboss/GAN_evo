@@ -10,6 +10,7 @@ from transformers import EarlyStoppingCallback
 
 from models.generator import LSTMGenerator
 from utils.bp_encoder import get_encoder
+import torch.nn.functional as F
 
 """
 inspiration from:
@@ -59,6 +60,7 @@ class BERT_fake:
         args = TrainingArguments(
             output_dir="output",
             evaluation_strategy="steps",
+            #evaluation_strategy="epoch",
             eval_steps=500,
             per_device_train_batch_size=cfg.batch_size,
             per_device_eval_batch_size=cfg.batch_size,
@@ -75,16 +77,24 @@ class BERT_fake:
             callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
         )
 
+    def load_model(self):
+        # Load trained model
+        model_path = "output/checkpoint-1000"
+        self.model = BertForSequenceClassification.from_pretrained(model_path, num_labels=2)
     def compute_metrics(self, p):
         pred, labels = p
         pred = np.argmax(pred, axis=1)
-
+        print("label: {}".format(labels))
+        print("pred: {}".format(pred))
         accuracy = accuracy_score(y_true=labels, y_pred=pred)
         recall = recall_score(y_true=labels, y_pred=pred)
         precision = precision_score(y_true=labels, y_pred=pred)
         f1 = f1_score(y_true=labels, y_pred=pred)
-
+        print("ACCCCC")
+        print(accuracy)
         return {"accuracy": accuracy, "precision": precision, "recall": recall, "f1": f1}
+    def evaluate(self):
+        self.trainer.evaluate()
 
     def fake_detection_train(self):
         # Train pre-trained model
@@ -93,7 +103,9 @@ class BERT_fake:
         print("LOSS")
         print(loss)
 
-    def getReward(self, training_bin, samples):
+        """
+        print("SAMPLES")
+        print(samples)
         samples = samples.tolist()
         samples = [self.bpe.decode(sample) for sample in samples]
         X_test_tokenized = self.tokenizer(samples, padding=True, truncation=True, max_length=512)
@@ -110,12 +122,37 @@ class BERT_fake:
         print(y_pred)
         print("y_raw")
         print(raw_pred)
+        """
+
+
+
+    def getReward(self, samples, training_bin):
+        samples = samples.tolist()
+        samples = [self.bpe.decode(sample) for sample in samples]
+        X_test_tokenized = self.tokenizer(samples, padding=True, truncation=True, max_length=512)
+        test_dataset = Dataset(X_test_tokenized)
+
+        # Make prediction
+        raw_pred, _, _ = self.trainer.predict(test_dataset)
+
+        # Preprocess raw predictions
+        y_pred = np.argmax(raw_pred, axis=1)
+        raw_pred = torch.tensor(raw_pred)
+        y_soft = F.softmax(raw_pred, dim=1)
+        sentence_rewards = y_soft[:, 1]
+        """
+        print("SAMPLES")
+        print(samples)
+        print("y_pred")
+        print(y_pred)
+        print("y_raw")
+        print(raw_pred)
+        """
 
         #fill the bins for the histogram
         for y in y_pred:
             training_bin[y] += 1
-
-        sentence_rewards = torch.tensor(y_pred, requires_grad=False)
+        sentence_rewards = torch.tensor(sentence_rewards, requires_grad=False)
         return sentence_rewards
 
 

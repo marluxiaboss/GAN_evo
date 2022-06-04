@@ -44,7 +44,6 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
         self.gen = helpers.load_weight(self.gen, pretrained_model.state_dict())
         self.init_model()
 
-
         # Optimizer
         self.gen_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
         # self.gen_adv_opt = optim.SGD(self.gen.parameters(), lr=cfg.gen_lr)
@@ -53,7 +52,7 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
         # otw. look at https://github.com/huggingface/transformers/blob/main/src/transformers/training_args.py
         self.gen_adv_opt = optim.AdamW(self.gen.parameters(), lr=cfg.gen_lr, weight_decay=0)
         # self.gen_adv_opt = transformers.AdamW(self.gen.parameters(), lr=cfg.gen_lr)
-        self.dis_opt = optim.Adam(self.dis.parameters(), lr=cfg.dis_lr)
+        # self.dis_opt = optim.Adam(self.dis.parameters(), lr=cfg.dis_lr)
         # we want to warmup for one epoch(for coco dataset we need 10 mini-batches to have
         # the whole dataset and here we test 20 epochs
         """
@@ -104,20 +103,26 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
             # self.dis = self.dis.cuda()
 
     def _run(self):
-        # ===ADVERSARIAL TRAINING===
-        self.log.info('Starting Adversarial Training...')
-        #self.log.info('Initial generator: %s' % (self.cal_metrics(fmt_str=True)))
 
+        self.log.info('Starting Adversarial Training...')
+        # self.log.info('Initial generator: %s' % (self.cal_metrics(fmt_str=True)))
+        # ===GENERATOR PRETRAIN===
+        self.pretrain_generator(cfg.MLE_train_epoch)
+        # ===DISCRIMINATOR PRETRAIN===
         for dis_step in range(cfg.d_step):
             self.dis.fake_detection_train()
+        #self.dis.load_model()
 
+        # ===ADVERSARIAL TRAINING===
         for adv_epoch in range(cfg.ADV_train_epoch):
             self.log.info('-----\nADV EPOCH %d\n-----' % adv_epoch)
             self.sig.update()
             if self.sig.adv_sig:
+                #self.dis.evaluate()
                 rating_bin = self.adv_train_generator(cfg.ADV_g_step)  # Generator
                 self.log.info("FAKE_BINS:EPOCH{}".format(adv_epoch))
                 self.log.info(rating_bin)
+                y
                 if (adv_epoch + 1) % cfg.adv_log_step == 0 or adv_epoch == cfg.ADV_train_epoch - 1:
                     if cfg.if_save and not cfg.if_test:
                         self._save('ADV', adv_epoch)
@@ -131,8 +136,6 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
             else:
                 self.log.info('>>> Stop by adv_signal! Finishing adversarial training...')
                 break
-
-
 
     def test_model_on_dataset(self, adv_epoch):
         """
@@ -224,6 +227,8 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
             # loss = nn.BCEWithLogitsLoss()
             # loss = nn.CrossEntropyLoss()
             adv_loss = loss(word_sentiments, target_sentiments)
+            print("LOSS")
+            print(adv_loss)
             """
             if i == 0:
                 self.log.info("word_sentiments")
@@ -243,7 +248,7 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
 
             # accumulate the gradient and update weights only when enough accumulated
             # this allow us to have batch size = eg 16 and effectively 128
-            if count % 32 == 0:
+            if count % 4 == 0:
                 self.optimize(self.gen_adv_opt, adv_loss, self.gen)
                 """
                 self.scheduler.step()
@@ -272,6 +277,40 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
         _, pos_reward = model.getReward(pos_val)
         _, neg_reward = model.getReward(neg_val)
         return torch.mean(pos_reward), torch.mean(neg_reward)
+
+    def pretrain_generator(self, epochs):
+        """
+        Max Likelihood Pre-training for the generator
+        """
+        for epoch in range(epochs):
+            self.sig.update()
+            if self.sig.pre_sig:
+                pre_loss = self.train_gen_epoch(self.gen, self.train_data.loader, self.gen_adv_opt)
+
+                # ===Test===
+                if epoch % cfg.pre_log_step == 0 or epoch == epochs - 1:
+                    self.log.info(
+                        '[MLE-GEN] epoch %d : Epoch = %d, pre_loss = %.4f, %s' % (epoch, epoch, pre_loss, self.cal_metrics(fmt_str=True)))
+            else:
+                self.log.info('>>> Stop by pre signal, skip to adversarial training...')
+                break
+
+
+    def train_gen_epoch(self, model, data_loader, optimizer):
+        total_loss = 0
+        for i, data in enumerate(data_loader):
+            inp, target = data['input'], data['target'] #[batch_size, max_seq_len], [batch_size, max_seq_len]
+            #inp = inp.transpose(1, 0).contiguous()       # [max_seq_len, batch_size]
+            if cfg.CUDA:
+                inp, target = inp.cuda(), target.cuda()
+            #print(f"inp: {inp} \n target: {target}")
+            # TODO: what is lm_labels ? is it exactly the target ?: probably
+            loss = model.forward(inp, lm_labels=target)  # [max_seq_len * batch_size, vocab_size]
+            #loss = criterion(pred, target.view(-1))
+            # TODO: is there something to change with optimizer ?
+            self.mle_optimize(optimizer, loss, model)
+            total_loss += loss.item()
+        return total_loss / len(data_loader)
 
     def cal_metrics(self, fmt_str=False):
         """
@@ -338,3 +377,9 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
         # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         opt.step()
         opt.zero_grad()
+
+    @staticmethod
+    def mle_optimize(opt, loss, model=None, retain_graph=False):
+        opt.zero_grad()
+        loss.backward(retain_graph=retain_graph)
+        opt.step()
