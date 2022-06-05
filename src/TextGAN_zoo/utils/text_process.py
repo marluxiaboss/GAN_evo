@@ -31,6 +31,12 @@ def cut_eot_token(tensor):
         return tensor
 
 
+def complete_with_eot(row):
+    while len(nltk.word_tokenize(row.lower())) < cfg.max_seq_len:
+        row = row + "<|endoftext|>"
+    return row
+
+
 def get_tokenlized(file):
     """tokenlize the file"""
     tokenlized = list()

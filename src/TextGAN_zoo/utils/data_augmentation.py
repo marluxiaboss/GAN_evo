@@ -1,7 +1,11 @@
 import random
 
+import nltk
+
 from utils import text_process
 import csv
+import config as cfg
+from nltk.tokenize import MWETokenizer
 
 
 def simple_sentences_rotation(dataset_path, dataset_dest, keep_original=True,
@@ -71,6 +75,12 @@ def reduce_dataset(dataset_path, dataset_dest):
     print(kept_sentences)
     text_process.write_tokens(dataset_dest, kept_sentences)
 
+
+def complete_with_eot(row):
+    while len(nltk.word_tokenize(row.lower())) < cfg.max_seq_len:
+        row = row + "<|endoftext|>"
+    return row
+
 def create_fake_true_dataset(fake_data_path, true_data_path):
     """
     Creates dataset for the gpt_bert GAN from true and fake data labeled.
@@ -84,6 +94,9 @@ def create_fake_true_dataset(fake_data_path, true_data_path):
     true_sentences = []
     with open(true_data_path) as true_data:
         for row in true_data:
+            row = row.rstrip('\n')
+            if len(nltk.word_tokenize(row.lower())) < cfg.max_seq_len:
+                row = complete_with_eot(row)
             true_sentences.append(row)
 
     header = ['text', 'label']

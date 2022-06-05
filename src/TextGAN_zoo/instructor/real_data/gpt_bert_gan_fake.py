@@ -111,14 +111,14 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
         # ===DISCRIMINATOR PRETRAIN===
         for dis_step in range(cfg.d_step):
             self.dis.fake_detection_train()
-        #self.dis.load_model()
+        # self.dis.load_model()
 
         # ===ADVERSARIAL TRAINING===
         for adv_epoch in range(cfg.ADV_train_epoch):
             self.log.info('-----\nADV EPOCH %d\n-----' % adv_epoch)
             self.sig.update()
             if self.sig.adv_sig:
-                #self.dis.evaluate()
+                # self.dis.evaluate()
                 rating_bin = self.adv_train_generator(cfg.ADV_g_step)  # Generator
                 self.log.info("FAKE_BINS:EPOCH{}".format(adv_epoch))
                 self.log.info(rating_bin)
@@ -285,30 +285,31 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
         for epoch in range(epochs):
             self.sig.update()
             if self.sig.pre_sig:
-                pre_loss = self.train_gen_epoch(self.gen, self.train_data.loader, self.gen_adv_opt)
+                pre_loss = self.train_gen_epoch(self.gen, self.train_data.loader, self.gen_opt)
 
                 # ===Test===
                 if epoch % cfg.pre_log_step == 0 or epoch == epochs - 1:
                     self.log.info(
-                        '[MLE-GEN] epoch %d : Epoch = %d, pre_loss = %.4f, %s' % (epoch, epoch, pre_loss, self.cal_metrics(fmt_str=True)))
+                        '[MLE-GEN] epoch %d : Epoch = %d, pre_loss = %.4f, %s' % (
+                        epoch, epoch, pre_loss, self.cal_metrics(fmt_str=True)))
             else:
                 self.log.info('>>> Stop by pre signal, skip to adversarial training...')
                 break
 
-
     def train_gen_epoch(self, model, data_loader, optimizer):
         total_loss = 0
         for i, data in enumerate(data_loader):
-            inp, target = data['input'], data['target'] #[batch_size, max_seq_len], [batch_size, max_seq_len]
-            #inp = inp.transpose(1, 0).contiguous()       # [max_seq_len, batch_size]
+            inp, target = data['input'], data['target']  # [batch_size, max_seq_len], [batch_size, max_seq_len]
             if cfg.CUDA:
                 inp, target = inp.cuda(), target.cuda()
-            #print(f"inp: {inp} \n target: {target}")
-            # TODO: what is lm_labels ? is it exactly the target ?: probably
-            loss = model.forward(inp, lm_labels=target)  # [max_seq_len * batch_size, vocab_size]
-            #loss = criterion(pred, target.view(-1))
-            # TODO: is there something to change with optimizer ?
-            self.mle_optimize(optimizer, loss, model)
+            loss = model.forward(inp, lm_labels=target)
+            print("inp{}".format(i))
+            print(inp)
+            print("targ")
+            print(target)
+            loss.backward()
+            if i % 4 == 0:
+                self.mle_optimize(optimizer, loss, model)
             total_loss += loss.item()
         return total_loss / len(data_loader)
 
@@ -380,6 +381,6 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
 
     @staticmethod
     def mle_optimize(opt, loss, model=None, retain_graph=False):
-        opt.zero_grad()
-        loss.backward(retain_graph=retain_graph)
+        # loss.backward(retain_graph=retain_graph)
         opt.step()
+        opt.zero_grad()
