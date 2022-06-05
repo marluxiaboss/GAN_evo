@@ -141,5 +141,6 @@ def plot_negativity_evolution():
     file = 'visual/saved_plots/neg_evo_plot{}.png'.format(log_time_str)
     plt.savefig(file)
 
+#def plot_bert_fake_pretrain():
 
 plot_negativity_evolution()

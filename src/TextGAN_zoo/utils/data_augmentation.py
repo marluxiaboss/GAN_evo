@@ -90,6 +90,7 @@ def create_fake_true_dataset(fake_data_path, true_data_path):
     fake_sentences = []
     with open(fake_data_path) as fake_data:
         for row in fake_data:
+            row = row.rstrip('\n')
             fake_sentences.append(row)
     true_sentences = []
     with open(true_data_path) as true_data:
@@ -103,10 +104,11 @@ def create_fake_true_dataset(fake_data_path, true_data_path):
     data = []
     for sentence in fake_sentences:
         # fake has the 0 label and true data has 1 label
-        data.append([sentence, 0])
+        tokenized
+        #data.append([sentence[:115], 0])
 
     for sentence in true_sentences:
-        data.append([sentence, 1])
+        data.append([sentence[:115], 1])
 
     with open('image_coco_fake_true.csv', 'w', encoding='UTF8', newline='') as f:
         writer = csv.writer(f)

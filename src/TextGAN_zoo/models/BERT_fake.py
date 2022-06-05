@@ -7,6 +7,8 @@ import torch
 from transformers import TrainingArguments, Trainer
 from transformers import BertTokenizer, BertForSequenceClassification
 from transformers import EarlyStoppingCallback
+import wandb
+wandb.init(project="bert-fake-detection", entity="hdasilva")
 
 from models.generator import LSTMGenerator
 from utils.bp_encoder import get_encoder
@@ -57,24 +59,41 @@ class BERT_fake:
         self.val_dataset = Dataset(X_val_tokenized, y_val)
 
         # Define Trainer parameters
+        """
+        args = TrainingArguments(
+            output_dir="output",
+            evaluation_strategy="steps",
+            #evaluation_strategy="epoch",
+            eval_steps=1,
+            max_steps=20,
+            per_device_train_batch_size=int(cfg.batch_size / 2),
+            per_device_eval_batch_size=int(cfg.batch_size / 2),
+            num_train_epochs=cfg.d_epoch,
+            seed=0,
+            save_total_limit=1,
+            load_best_model_at_end=True,
+        )
+        """
         args = TrainingArguments(
             output_dir="output",
             evaluation_strategy="steps",
             #evaluation_strategy="epoch",
             eval_steps=500,
-            per_device_train_batch_size=cfg.batch_size,
-            per_device_eval_batch_size=cfg.batch_size,
+            per_device_train_batch_size=int(cfg.batch_size / 2),
+            per_device_eval_batch_size=int(cfg.batch_size / 2),
             num_train_epochs=cfg.d_epoch,
             seed=0,
+            save_total_limit=1,
             load_best_model_at_end=True,
+            report_to="wandb"
         )
         self.trainer = Trainer(
             model=self.model,
             args=args,
             train_dataset=self.train_dataset,
             eval_dataset=self.val_dataset,
-            compute_metrics=self.compute_metrics,
-            callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
+            compute_metrics=self.compute_metrics
+            #callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
         )
 
     def load_model(self):
@@ -99,9 +118,11 @@ class BERT_fake:
     def fake_detection_train(self):
         # Train pre-trained model
         self.trainer.train()
+        """
         loss = self.trainer.evaluate()
         print("LOSS")
         print(loss)
+        """
 
         """
         print("SAMPLES")
