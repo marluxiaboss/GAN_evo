@@ -6,7 +6,7 @@
 # @Blog         : http://zhiweil.ml/
 # @Description  :
 # Copyrights (C) 2018. All Rights Reserved.
-
+import csv
 import json
 import nltk
 from nltk.tokenize import MWETokenizer
@@ -113,7 +113,7 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
         # ===GENERATOR PRETRAIN===
         self.log.info('Starting generator fine-tuning...')
         self.pretrain_generator(cfg.MLE_train_epoch)
-        #self.create_fake_dataset()
+        #self.create_fake_dataset(0)
         # ===DISCRIMINATOR PRETRAIN===
         self.log.info('Starting discriminator fine-tuning...')
         for dis_step in range(cfg.d_step):
@@ -127,10 +127,12 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
             self.sig.update()
             if self.sig.adv_sig:
                 #self.dis.evaluate()
-                rating_bin = self.adv_train_generator(cfg.ADV_g_step)  # Generator
+                if adv_epoch == 0:
+                    rating_bin = self.sample_sentiment()
+                else:
+                    rating_bin = self.adv_train_generator(cfg.ADV_g_step)  # Generator
                 self.log.info("FAKE_BINS:EPOCH{}".format(adv_epoch))
                 self.log.info(rating_bin)
-                y
                 if (adv_epoch + 1) % cfg.adv_log_step == 0 or adv_epoch == cfg.ADV_train_epoch - 1:
                     if cfg.if_save and not cfg.if_test:
                         self._save('ADV', adv_epoch)
@@ -360,8 +362,8 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
         data_loader = self.train_data.loader
         fake_sentences = []
         for count, data in enumerate(data_loader):
-            if count * cfg.batch_size > 10000:
-                break
+            #if count * cfg.batch_size > 10000:
+            #    break
             inp = data['input']
             if cfg.CUDA:
                 inp = inp.cuda()
@@ -373,6 +375,7 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
             for sample in samples:
                 sample_tokenized = self.ntlk_tokenizer.tokenize(sample.split())
                 #sample_tokenized = sample
+                sample_tokenized = sample_tokenized[:cfg.max_seq_len]
                 fake_sentences.append(sample_tokenized)
         text_process.write_tokens(cfg.save_samples_root + 'fake_dataset_epoch' + str(epoch) + '.txt', fake_sentences)
 
@@ -382,31 +385,43 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
         """
         # fake_sentences = text_process.get_tokenlized(fake_data_path)
         # true_sentences = text_process.get_tokenlized(true_data_path)
+        fake_data_path = cfg.save_samples_root + 'fake_dataset_epoch' + str(epoch) + '.txt'
+        true_data_path = 'dataset/image_coco.txt'
+
         fake_sentences = []
         with open(fake_data_path) as fake_data:
             for row in fake_data:
-                if len(ntlk_tokenizer.tokenize(row.split())) < cfg.max_seq_len:
+                row = row.rstrip('\n')
+                if len(nltk.word_tokenize(row.lower())) < cfg.max_seq_len:
                     row = text_process.complete_with_eot(row)
-
                 fake_sentences.append(row)
         true_sentences = []
         with open(true_data_path) as true_data:
             for count, row in enumerate(true_data):
-                if count > 10000:
-                    break
-                if len(ntlk_tokenizer.tokenize(row.split())) < cfg.max_seq_len:
+                #if count > 10000:
+                #    break
+                if len(nltk.word_tokenize(row.lower())) < cfg.max_seq_len:
                     row = text_process.complete_with_eot(row)
                 true_sentences.append(row)
 
         header = ['text', 'label']
         data = []
+        """
         for sentence in fake_sentences:
             # fake has the 0 label and true data has 1 label
+            sentence = self.ntlk_tokenizer.tokenize(sentence)
+            "".join([" " + i if not i.startswith("'") and i not in string.punctuation else i for i in tokens]).strip()
             data.append([sentence, 0])
+        """
+
+        for sentence in fake_sentences:
+            # fake has the 0 label and true data has 1 label
+            data.append([sentence[:115], 0])
 
         for sentence in true_sentences:
-            data.append([sentence, 1])
-        image_coco_fake_true_path = cfg.save_samples_root + 'image_coco_fake_true_epoch' + str(epoch) + '.csv'
+            data.append([sentence[:115], 1])
+
+        image_coco_fake_true_path = cfg.save_samples_root + 'image_coco_fake_true' + str(epoch) + '.csv'
         with open(image_coco_fake_true_path, 'w', encoding='UTF8', newline='') as f:
             writer = csv.writer(f)
 

@@ -91,6 +91,8 @@ def create_fake_true_dataset(fake_data_path, true_data_path):
     with open(fake_data_path) as fake_data:
         for row in fake_data:
             row = row.rstrip('\n')
+            if len(nltk.word_tokenize(row.lower())) < cfg.max_seq_len:
+                row = complete_with_eot(row)
             fake_sentences.append(row)
     true_sentences = []
     with open(true_data_path) as true_data:
@@ -104,8 +106,7 @@ def create_fake_true_dataset(fake_data_path, true_data_path):
     data = []
     for sentence in fake_sentences:
         # fake has the 0 label and true data has 1 label
-        tokenized
-        #data.append([sentence[:115], 0])
+        data.append([sentence[:115], 0])
 
     for sentence in true_sentences:
         data.append([sentence[:115], 1])
@@ -126,4 +127,4 @@ def create_fake_true_dataset(fake_data_path, true_data_path):
 #                          keep_original=False, uniform_rotation=False, cut_a=True)
 #cut_first_token("image_coco.txt", "image_coco_with_no_a")
 #reduce_dataset("emnlp_news.txt", "emnlp_news_tiny.txt")
-create_fake_true_dataset("image_coco_fake.txt", "image_coco.txt")
+create_fake_true_dataset("image_coco_fake_no_train.txt", "image_coco.txt")
