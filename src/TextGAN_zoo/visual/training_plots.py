@@ -141,6 +141,39 @@ def plot_negativity_evolution():
     file = 'visual/saved_plots/neg_evo_plot{}.png'.format(log_time_str)
     plt.savefig(file)
 
-#def plot_bert_fake_pretrain():
 
-plot_negativity_evolution()
+def plot_fake_training(rating_bins):
+    """
+    Show gen fake training
+    """
+
+    X = ['FAKE', 'TRUE']
+    rating_bins0 = rating_bins[0]
+    rating_bins1 = rating_bins[1]
+    rating_bins2 = rating_bins[2]
+    rating_bins3 = rating_bins[3]
+    rating_bins4 = rating_bins[4]
+    rating_bins5 = rating_bins[5]
+
+    X_axis = np.arange(len(X))
+
+    plt.bar(X_axis - 0.3, rating_bins0, 0.1, label='epoch 0')
+    plt.bar(X_axis - 0.2, rating_bins1, 0.1, label='epoch 1')
+    plt.bar(X_axis - 0.1, rating_bins2, 0.1, label='epoch 2')
+    plt.bar(X_axis + 0, rating_bins3, 0.1, label='epoch 3')
+    plt.bar(X_axis + 0.1, rating_bins4, 0.1, label='epoch 4')
+    plt.bar(X_axis + 0.2, rating_bins5, 0.1, label='epoch 5')
+
+    plt.xticks(X_axis, X)
+    plt.xlabel("rating ")
+    plt.ylabel("frequency")
+    plt.title("fake/true compared at each epoch")
+    plt.legend()
+    log_time_str = strftime("%m_%d_%H%M", localtime())
+    file = 'saved_plots/ratings{}.png'.format(log_time_str)
+    plt.savefig(file)
+
+
+fake_true_bins = [[8808, 1192], [8714, 1268], [7435, 2545],
+                  [7638, 2362], [8014, 1986], [8296, 1704]]
+plot_fake_training(fake_true_bins)

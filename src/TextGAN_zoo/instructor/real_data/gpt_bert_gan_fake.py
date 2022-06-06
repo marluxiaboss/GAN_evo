@@ -64,8 +64,8 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
         """
         # Tokenizer for the pretrained gpt2
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-        self.ntlk_tokenizer = MWETokenizer()
-        self.ntlk_tokenizer.add_mwe(('<', '|endoftext|', '>'))
+        self.nltk_tokenizer = MWETokenizer()
+        self.nltk_tokenizer.add_mwe(('<', '|endoftext|', '>'))
         self.bpe = get_encoder()
 
         # load dictionary
@@ -111,12 +111,14 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
 
         # self.log.info('Initial generator: %s' % (self.cal_metrics(fmt_str=True)))
         # ===GENERATOR PRETRAIN===
-        self.log.info('Starting generator fine-tuning...')
-        self.pretrain_generator(cfg.MLE_train_epoch)
+        #self.log.info('Starting generator fine-tuning...')
+        #self.pretrain_generator(cfg.MLE_train_epoch)
         #self.create_fake_dataset(0)
         # ===DISCRIMINATOR PRETRAIN===
         self.log.info('Starting discriminator fine-tuning...')
         for dis_step in range(cfg.d_step):
+            self.create_fake_dataset(adv_epoch)
+            self.create_fake_true_dataset(adv_epoch)
             self.dis.fake_detection_train()
         #self.dis.load_model()
 
@@ -127,12 +129,20 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
             self.sig.update()
             if self.sig.adv_sig:
                 #self.dis.evaluate()
+                """
                 if adv_epoch == 0:
+                    self.log.info('Begin generator evaluation before training...')
                     rating_bin = self.sample_sentiment()
+                    self.log.info('End generator evaluation before training')
                 else:
-                    rating_bin = self.adv_train_generator(cfg.ADV_g_step)  # Generator
+                """
+                rating_bin = self.adv_train_generator(cfg.ADV_g_step)  # Generator
                 self.log.info("FAKE_BINS:EPOCH{}".format(adv_epoch))
                 self.log.info(rating_bin)
+                if adv_epoch == 3:
+                    self.create_fake_dataset(adv_epoch)
+                    self.create_fake_true_dataset(adv_epoch)
+                    self.dis.evaluate(adv_epoch)
                 if (adv_epoch + 1) % cfg.adv_log_step == 0 or adv_epoch == cfg.ADV_train_epoch - 1:
                     if cfg.if_save and not cfg.if_test:
                         self._save('ADV', adv_epoch)
@@ -237,8 +247,6 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
             # loss = nn.BCEWithLogitsLoss()
             # loss = nn.CrossEntropyLoss()
             adv_loss = loss(word_sentiments, target_sentiments)
-            print("LOSS")
-            print(adv_loss)
             if cfg.CUDA:
                 adv_loss = adv_loss.cuda()
                 # self.optimize(self.gen_adv_opt, adv_loss, self.gen)
@@ -373,9 +381,9 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
             samples = samples[0].tolist()
             samples = [self.bpe.decode(sample) for sample in samples]
             for sample in samples:
-                sample_tokenized = self.ntlk_tokenizer.tokenize(sample.split())
+                sample_tokenized = self.nltk_tokenizer.tokenize(sample.split())
                 #sample_tokenized = sample
-                sample_tokenized = sample_tokenized[:cfg.max_seq_len]
+                sample_tokenized = sample_tokenized[:15]
                 fake_sentences.append(sample_tokenized)
         text_process.write_tokens(cfg.save_samples_root + 'fake_dataset_epoch' + str(epoch) + '.txt', fake_sentences)
 
@@ -400,6 +408,7 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
             for count, row in enumerate(true_data):
                 #if count > 10000:
                 #    break
+                row = row.rstrip('\n')
                 if len(nltk.word_tokenize(row.lower())) < cfg.max_seq_len:
                     row = text_process.complete_with_eot(row)
                 true_sentences.append(row)
@@ -409,7 +418,7 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
         """
         for sentence in fake_sentences:
             # fake has the 0 label and true data has 1 label
-            sentence = self.ntlk_tokenizer.tokenize(sentence)
+            sentence = self.nltk_tokenizer.tokenize(sentence)
             "".join([" " + i if not i.startswith("'") and i not in string.punctuation else i for i in tokens]).strip()
             data.append([sentence, 0])
         """
