@@ -8,6 +8,7 @@
 # Copyrights (C) 2018. All Rights Reserved.
 
 import json
+import nltk
 
 import torch
 import torch.optim as optim
@@ -42,26 +43,28 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
         # Load weights from huggingface GPT_2 transformer class
         pretrained_model = GPT2Model.from_pretrained("gpt2")
         pretrained_model.cuda()
-        # summary(pretrained_model, (1,14))
+
         self.gen = helpers.load_weight(self.gen, pretrained_model.state_dict())
         self.init_model()
 
         # Optimizer
         self.gen_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
         # self.gen_adv_opt = optim.SGD(self.gen.parameters(), lr=cfg.gen_lr)
-        # self.gen_adv_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
+        self.gen_adv_opt = optim.Adam(self.gen.parameters(), lr=cfg.gen_lr)
         # most default parameters for AdamW should be good
         # otw. look at https://github.com/huggingface/transformers/blob/main/src/transformers/training_args.py
-        self.gen_adv_opt = optim.AdamW(self.gen.parameters(), lr=cfg.gen_lr, weight_decay=0)
+        #self.gen_adv_opt = optim.AdamW(self.gen.parameters(), lr=cfg.gen_lr, weight_decay=0)
         # self.gen_adv_opt = transformers.AdamW(self.gen.parameters(), lr=cfg.gen_lr)
         self.dis_opt = optim.Adam(self.dis.parameters(), lr=cfg.dis_lr)
         # we want to warmup for one epoch(for coco dataset we need 10 mini-batches to have
         # the whole dataset and here we test 20 epochs
+
         """
         self.scheduler = get_linear_schedule_with_warmup(
-            self.gen_adv_opt, num_warmup_steps=10,  num_training_steps=10 * 20
+            self.gen_adv_opt, num_warmup_steps=10,  num_training_steps=10 * 12
         )
         """
+
         # Tokenizer for the pretrained gpt2
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
         self.bpe = get_encoder()
@@ -113,27 +116,20 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             self.log.info('-----\nADV EPOCH %d\n-----' % adv_epoch)
             self.sig.update()
             if self.sig.adv_sig:
-
-                if adv_epoch == 0:
-                    #rating_bin = self.sample_sentiment()
-                    self.create_fake_dataset()
-                """
-                else:
-                """
-                """
                 rating_bin = self.adv_train_generator(cfg.ADV_g_step)  # Generator
                 self.log.info("RATING_BINS:EPOCH{}".format(adv_epoch))
                 self.log.info(rating_bin)
+                """
                 if (adv_epoch + 1) % cfg.adv_log_step == 0 or adv_epoch == cfg.ADV_train_epoch - 1:
                     if cfg.if_save and not cfg.if_test:
                         self._save('ADV', adv_epoch)
+                """
                 if adv_epoch % 2 == 0:
                     self.rating_bins.append(rating_bin)
+                """
                 if adv_epoch == 21:
                     # visual.training_plots.plot_ratings(self.rating_bins)
                     visual.training_plots.plot_ratings_20(self.rating_bins)
-
-                # self.test_model_on_dataset(adv_epoch)
                 """
             else:
                 self.log.info('>>> Stop by adv_signal! Finishing adversarial training...')
@@ -235,8 +231,8 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             if cfg.CUDA:
                 word_sentiments = word_sentiments.cuda()
                 target_sentiments = target_sentiments.cuda()
-            loss = nn.MSELoss()
-            # loss = nn.L1Loss()
+            #loss = nn.MSELoss()
+            loss = nn.L1Loss()
             # loss = nn.BCEWithLogitsLoss()
             # loss = nn.CrossEntropyLoss()
             adv_loss = loss(word_sentiments, target_sentiments)
@@ -344,13 +340,16 @@ class GPT_BERT_DPGAN(SelfAttentionInstructor):
             # generate one sample from context
             samples = self.gen.sample_teacher_forcing(inp)
             samples = samples[0].tolist()
-            samples = [self.preprocess(self.bpe.decode(sample)) for sample in samples]
-            fake_sentences.extend(samples)
+            samples = [self.bpe.decode(sample) for sample in samples]
+            for sample in samples:
+                sample_tokenized = nltk.word_tokenize(sample)
+                #sample_tokenized = sample
+                fake_sentences.append(sample_tokenized)
         text_process.write_tokens(cfg.save_samples_root + 'fake_dataset.txt', fake_sentences)
 
     @staticmethod
     def optimize(opt, loss, model=None, retain_graph=False):
         # loss.backward(retain_graph=retain_graph)
-        # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        #torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
         opt.step()
         opt.zero_grad()

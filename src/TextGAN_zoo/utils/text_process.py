@@ -11,11 +11,12 @@ import nltk
 import numpy as np
 import os
 import torch
+import string
 
 import config as cfg
 
 
-def cut_eot_token(tensor):
+def cut_eot_token(tensor, set_length=-1):
     out = None
     first_eot_index = None
     j = 0
@@ -25,10 +26,14 @@ def cut_eot_token(tensor):
         j += 1
     if first_eot_index is not None:
         out = tensor[:first_eot_index]
-    if out is not None:
-        return out
     else:
-        return tensor
+        out = tensor
+    if set_length != -1:
+        while len(out) < set_length:
+            out = out.cpu()
+            out = torch.cat((out, torch.tensor([50256])), 0)
+            out = out.cuda()
+    return out
 
 
 def complete_with_eot(row):
@@ -383,6 +388,18 @@ def build_embedding_matrix(dataset):
         torch.save(embedding_matrix, embed_filename)
     return embedding_matrix
 
+def check_cut_version(sample):
+    sample_tokenized = sample.split()
+    sample_tokenized = nltk.word_tokenize(sample)
+    # sample_tokenized = sample
+    sample_tokenized = sample_tokenized[:15]
+    sample_tokenized = "".join(
+        [" " + i if not i.startswith("'") and i not in string.punctuation else i for i in
+         sample_tokenized]).strip()
+    sample_tokenized = complete_with_eot(sample_tokenized)[:115]
+    return sample_tokenized
+
+print(check_cut_version("a car that seems to be parked illegally near the Trump Tower in New York City on September 10, 2017. The 100 in the city will be at 10 a.m. in the the City, in the the City"))
 
 if __name__ == '__main__':
     os.chdir('../')

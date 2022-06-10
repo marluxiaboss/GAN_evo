@@ -1,199 +1,125 @@
-import numpy as np
-import pandas as pd
-import config as cfg
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
-import torch
-from transformers import TrainingArguments, Trainer
-from transformers import BertTokenizer, BertForSequenceClassification
-from transformers import EarlyStoppingCallback
+# -*- coding: utf-8 -*-
+# @Author       : William
+# @Project      : TextGAN-william
+# @FileName     : SeqGAN_G.py
+# @Time         : Created at 2019-04-25
+# @Blog         : http://zhiweil.ml/
+# @Description  :
+# Copyrights (C) 2018. All Rights Reserved.
 
+import torch
+from torch import nn
+import torch.nn.functional as F
+
+import config as cfg
 from models.generator import LSTMGenerator
 from utils.bp_encoder import get_encoder
-import torch.nn.functional as F
-from nltk.tokenize import MWETokenizer
-import string
-from utils import text_process
-
-"""
-inspiration from:
-https://towardsdatascience.com/fine-tuning-pretrained-nlp-models-with-huggingfaces-trainer-6326a4456e7b
-"""
+from utils.data_loader import GenDataIter
+from transformers import pipeline
+from transformers import AutoModelForSequenceClassification
+from transformers import AutoTokenizer, AutoConfig
+import numpy as np
+from scipy.special import softmax
 
 
-# Create torch dataset
-class Dataset(torch.utils.data.Dataset):
-    def __init__(self, encodings, labels=None):
-        self.encodings = encodings
-        self.labels = labels
-
-    def __getitem__(self, idx):
-        item = {key: torch.tensor(val[idx]) for key, val in self.encodings.items()}
-        if self.labels:
-            item["labels"] = torch.tensor(self.labels[idx])
-        return item
-
-    def __len__(self):
-        return len(self.encodings["input_ids"])
-
-
-class BERT_fake:
-    def __init__(self):
-        # Define pretrained tokenizer and model
-        self.model_name = "bert-base-uncased"
-        self.nltk_tokenizer = MWETokenizer()
-        self.nltk_tokenizer.add_mwe(('<', '|endoftext|', '>'))
-        self.tokenizer = BertTokenizer.from_pretrained(self.model_name)
-        self.model = BertForSequenceClassification.from_pretrained(self.model_name, num_labels=2)
+class BERT_sentiment(LSTMGenerator):
+    def __init__(self, embedding_dim, hidden_dim, vocab_size, max_seq_len, padding_idx, gpu=False):
+        super(BERT_sentiment, self).__init__(embedding_dim, hidden_dim, vocab_size, max_seq_len, padding_idx, gpu)
+        self.name = 'roberta'
         self.bpe = get_encoder()
-        """
-        # Initialize the dataset for training
-        data = pd.read_csv('dataset/image_coco_fake_true.csv')
+        self.model_name = f"cardiffnlp/twitter-roberta-base-sentiment-latest"
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        self.config = AutoConfig.from_pretrained(self.model_name)
+        self.sentiment = AutoModelForSequenceClassification.from_pretrained(self.model_name)
+        self.softmax = nn.Softmax(dim=1)
 
-        # ----- 1. Preprocess data -----#
-        # Preprocess data
-        X = list(data["text"])
-        y = list(data["label"])
-        X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2)
-        X_train_tokenized = self.tokenizer(X_train, padding=True, truncation=True, max_length=512)
-        X_val_tokenized = self.tokenizer(X_val, padding=True, truncation=True, max_length=512)
-
-        self.train_dataset = Dataset(X_train_tokenized, y_train)
-        self.val_dataset = Dataset(X_val_tokenized, y_val)
-        """
-
-        # Define Trainer parameters
-        """
-        args = TrainingArguments(
-            output_dir="output",
-            evaluation_strategy="steps",
-            #evaluation_strategy="epoch",
-            eval_steps=1,
-            max_steps=20,
-            per_device_train_batch_size=int(cfg.batch_size / 2),
-            per_device_eval_batch_size=int(cfg.batch_size / 2),
-            num_train_epochs=cfg.d_epoch,
-            seed=0,
-            save_total_limit=1,
-            load_best_model_at_end=True,
-        )
-        """
-        args = TrainingArguments(
-            output_dir="output",
-            evaluation_strategy="steps",
-            # evaluation_strategy="epoch",
-            eval_steps=40,
-            per_device_train_batch_size=int(cfg.batch_size / 2),
-            per_device_eval_batch_size=int(cfg.batch_size / 2),
-            gradient_accumulation_steps=16,
-            num_train_epochs=cfg.d_epoch,
-            seed=0,
-            save_steps=40,
-            save_total_limit=1,
-            load_best_model_at_end=True,
-            log_level="critical",
-            report_to="wandb"
-        )
-        self.trainer = Trainer(
-            model=self.model,
-            args=args,
-            train_dataset=self.train_dataset,
-            eval_dataset=self.val_dataset,
-            compute_metrics=self.compute_metrics
-            # callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
-        )
-
-    def load_model(self):
-        # Load trained model
-        model_path = "output/checkpoint-1000"
-        self.model = BertForSequenceClassification.from_pretrained(model_path, num_labels=2)
-
-    def compute_metrics(self, p):
-        pred, labels = p
-        pred = np.argmax(pred, axis=1)
-        print("label: {}".format(labels))
-        print("pred: {}".format(pred))
-        accuracy = accuracy_score(y_true=labels, y_pred=pred)
-        recall = recall_score(y_true=labels, y_pred=pred)
-        precision = precision_score(y_true=labels, y_pred=pred)
-        f1 = f1_score(y_true=labels, y_pred=pred)
-        print("ACC")
-        print(accuracy)
-        return {"accuracy": accuracy, "precision": precision, "recall": recall, "f1": f1}
-
-    def evaluate(self, epoch=-1):
-        if epoch == -1:
-            self.trainer.evaluate()
+    def score_token(self, score, label):
+        if label == 'POSITIVE':
+            return score
         else:
-            # Initialize the dataset for training
-            image_coco_fake_true_path = cfg.save_samples_root + 'image_coco_fake_true' + str(epoch) + '.csv'
-            data = pd.read_csv(image_coco_fake_true_path)
-            # ----- 1. Preprocess data -----#
-            # Preprocess data
-            X = list(data["text"])
-            y = list(data["label"])
-            X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.99)
-            X_val_tokenized = self.tokenizer(X_val, padding=True, truncation=True, max_length=512)
-            val_dataset = Dataset(X_val_tokenized, y_val)
-            self.trainer.evaluate(val_dataset)
+            return 1.0 - score
 
-    def fake_detection_train(self, epoch=-1):
-        if epoch == -1:
-            # Train pre-trained model
-            self.trainer.train()
-        else:
-            # Initialize the dataset for training
-            image_coco_fake_true_path = cfg.save_samples_root + 'image_coco_fake_true' + str(epoch) + '.csv'
-            data = pd.read_csv(image_coco_fake_true_path)
-
-            # ----- 1. Preprocess data -----#
-            # Preprocess data
-            X = list(data["text"])
-            y = list(data["label"])
-            X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2)
-            X_train_tokenized = self.tokenizer(X_train, padding=True, truncation=True, max_length=512)
-            X_val_tokenized = self.tokenizer(X_val, padding=True, truncation=True, max_length=512)
-            self.train_dataset = Dataset(X_train_tokenized, y_train)
-            self.val_dataset = Dataset(X_val_tokenized, y_val)
-            self.trainer.train()
-
-    def getReward(self, samples, training_bin):
-        samples = samples.tolist()
-        samples = [self.bpe.decode(sample) for sample in samples]
-        samples_cut = []
-
-
-        for sample in samples:
-            sample_tokenized = self.nltk_tokenizer.tokenize(sample.split())
-            # sample_tokenized = sample
-            sample_tokenized = sample_tokenized[:15]
-            sample_tokenized = "".join([" " + i if not i.startswith("'") and i not in string.punctuation else i for i in sample_tokenized]).strip()
-            sample_tokenized = text_process.complete_with_eot(sample_tokenized)[:115]
-            samples_cut.append(sample_tokenized)
-
-
-        X_test_tokenized = self.tokenizer(samples_cut, padding=True, truncation=True, max_length=512)
-        test_dataset = Dataset(X_test_tokenized)
-
-        # Make prediction
-        raw_pred, _, _ = self.trainer.predict(test_dataset)
-
-        # Preprocess raw predictions
-        y_pred = np.argmax(raw_pred, axis=1)
-        raw_pred = torch.tensor(raw_pred)
-        y_soft = F.softmax(raw_pred, dim=1)
-        sentence_rewards = y_soft[:, 1]
+    def sentiment_to_score(self, scores):
         """
-        print("SAMPLES")
+        Works with score with 3 classes (neg, neutral, pos)
+        """
+        rewards = []
+        for score in list(scores):
+            neutral_score = score[1].item() * 0.5
+            positive_score = score[2].item() * 1
+            rewards.append(neutral_score + positive_score)
+        return rewards
+
+    def preprocess(self, text):
+        new_text = []
+        for t in text.split(" "):
+            t = '@user' if t.startswith('@') and len(t) > 1 else t
+            t = 'http' if t.startswith('http') else t
+            new_text.append(t)
+        return " ".join(new_text)
+
+    def getBinIndex(self, value):
+        bin_values = [0.0, 0.5, 1.0]
+        bin_distances = np.array([abs(bin_value - value) for bin_value in bin_values])
+        bin_index = np.argmin(bin_distances)
+        return bin_index
+
+    def getReward(self, samples, training_bin, one_sample=False, pos_or_neg_sample=None):
+        """
+        Get word-level reward and sentence-level reward of samples.
+        """
+
+        """
+        word_reward = F.nll_loss(pred, target.view(-1), reduction='none').view(batch_size, -1)
+        sentence_reward = torch.mean(word_reward, dim=-1, keepdim=True)
+        """
+        with torch.no_grad():
+
+            if one_sample:
+                samples = self.bpe.decode(samples.tolist())
+            else:
+                samples = samples.tolist()
+                samples = [self.preprocess(self.bpe.decode(sample)) for sample in samples]
+            # TODO: would be better to use the input as a tensor to be
+            # able to use the gpu
+            # print("samples")
+            # print(samples)
+            encoded_input = self.tokenizer(samples, return_tensors='pt', padding=True)
+            """
+            if cfg.CUDA:
+                encoded_input['input_ids'] = encoded_input['input_ids'].cuda()
+                encoded_input['attention_mask'] = encoded_input['attention_mask'].cuda()
+            """
+            output = self.sentiment(**encoded_input)
+            # print("output[0]")
+            # print(output[0])
+            score_pt_large = self.softmax(output[0])
+            # print("score_pt_large")
+            # print(score_pt_large)
+            sentences_reward = self.sentiment_to_score(score_pt_large)
+            # print("sentences_reward")
+            # print(sentences_reward)
+            sentence_sentiment = torch.tensor(sentences_reward, requires_grad=False)
+            for sentiment in sentences_reward:
+                training_bin[self.getBinIndex(sentiment)] += 1
+        """
+        print("SAMPLES_BERT")
         print(samples)
-        print("y_pred")
-        print(y_pred)
-        print("y_raw")
-        print(raw_pred)
+        print("SENTIMENTS")
+        print(sentiments)
         """
 
-        # fill the bins for the histogram
-        for y in y_pred:
-            training_bin[y] += 1
-        sentence_rewards = torch.tensor(sentence_rewards, requires_grad=False)
-        return sentence_rewards
+        """
+        label_map = {'NEGATIVE': 0.0, 'POSITIVE': 1.0}
+        sentence_sentiment = torch.tensor([self.score_token(sentiment['score'], sentiment['label']) for sentiment in
+                                         sentiments], requires_grad=False)
+        #sentence_sentiment = sentence_rewards.view(1, len(sentence_rewards))
+        # maybe better to give rewards for only this length and not cfg.max_seqlen
+        #word_rewards = [sentence_rewards for i in range(len(samples[0]))]
+        for sentiment in sentiments:
+            training_bin[int(label_map[sentiment['label']])] += 1
+        #print("SENTENCE_SENTIMENT")
+        #print(sentence_sentiment)
+        """
+        return sentence_sentiment
+

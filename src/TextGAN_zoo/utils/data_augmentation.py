@@ -70,7 +70,7 @@ def reduce_dataset(dataset_path, dataset_dest):
 
     # get all sentences of the dataset in a list
     original_sentences = text_process.get_tokenlized(dataset_path)
-    for i in range(10000):
+    for i in range(25000):
         kept_sentences.append(original_sentences[i])
     print(kept_sentences)
     text_process.write_tokens(dataset_dest, kept_sentences)
@@ -126,5 +126,5 @@ def create_fake_true_dataset(fake_data_path, true_data_path):
 #simple_sentences_rotation("image_coco.txt", "image_coco_with_random_rotations.txt",
 #                          keep_original=False, uniform_rotation=False, cut_a=True)
 #cut_first_token("image_coco.txt", "image_coco_with_no_a")
-#reduce_dataset("emnlp_news.txt", "emnlp_news_tiny.txt")
-create_fake_true_dataset("image_coco_fake_no_train.txt", "image_coco.txt")
+reduce_dataset("emnlp_news.txt", "emnlp_news_small.txt")
+#create_fake_true_dataset("image_coco_fake_no_train.txt", "image_coco.txt")

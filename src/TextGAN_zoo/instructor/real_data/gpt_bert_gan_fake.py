@@ -24,7 +24,8 @@ from models.GPT_2 import GPT_2
 from utils import helpers
 from utils.bp_encoder import get_encoder
 from utils.gpt2_data_loader import GenDataIter
-from utils.text_process import write_tokens, load_dict, tensor_to_tokens, tokens_to_tensor, text_process, cut_eot_token, complete_with_eot
+from utils.text_process import write_tokens, load_dict, tensor_to_tokens, tokens_to_tensor, text_process, cut_eot_token, \
+    complete_with_eot
 from torchvision import models
 from torchsummary import summary
 from torch import nn
@@ -77,12 +78,12 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
 
         # recorded info for ploting
         self.rating_bins = []
-
         # Dataloader
         try:
             self.train_data = GenDataIter(cfg.train_data)
             self.test_data = GenDataIter(cfg.test_data, if_test_data=True)
         except:
+            print("ERROR")
             pass
 
         try:
@@ -108,19 +109,22 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
 
     def _run(self):
 
-
         # self.log.info('Initial generator: %s' % (self.cal_metrics(fmt_str=True)))
         # ===GENERATOR PRETRAIN===
-        #self.log.info('Starting generator fine-tuning...')
-        #self.pretrain_generator(cfg.MLE_train_epoch)
-        #self.create_fake_dataset(0)
+        self.log.info('Starting generator fine-tuning...')
+        self.pretrain_generator(cfg.MLE_train_epoch)
+        # self.create_fake_dataset(0)
+        # ===CREATE DATASET===
+        """
+        self.log.info("Starting creation of dataset")
+        self.create_fake_dataset(0)
+        self.create_fake_true_dataset(0)
+        """
         # ===DISCRIMINATOR PRETRAIN===
         self.log.info('Starting discriminator fine-tuning...')
         for dis_step in range(cfg.d_step):
-            self.create_fake_dataset(adv_epoch)
-            self.create_fake_true_dataset(adv_epoch)
-            self.dis.fake_detection_train()
-        #self.dis.load_model()
+            self.dis.fake_detection_train(0)
+        # self.dis.load_model()
 
         # ===ADVERSARIAL TRAINING===
         self.log.info('Starting Adversarial Training...')
@@ -128,7 +132,7 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
             self.log.info('-----\nADV EPOCH %d\n-----' % adv_epoch)
             self.sig.update()
             if self.sig.adv_sig:
-                #self.dis.evaluate()
+                # self.dis.evaluate()
                 """
                 if adv_epoch == 0:
                     self.log.info('Begin generator evaluation before training...')
@@ -143,6 +147,8 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
                     self.create_fake_dataset(adv_epoch)
                     self.create_fake_true_dataset(adv_epoch)
                     self.dis.evaluate(adv_epoch)
+                if adv_epoch == 5:
+                    y
                 if (adv_epoch + 1) % cfg.adv_log_step == 0 or adv_epoch == cfg.ADV_train_epoch - 1:
                     if cfg.if_save and not cfg.if_test:
                         self._save('ADV', adv_epoch)
@@ -257,7 +263,7 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
 
             # accumulate the gradient and update weights only when enough accumulated
             # this allow us to have batch size = eg 16 and effectively 128
-            if count % 4 == 0:
+            if count % 8 == 0:
                 self.optimize(self.gen_adv_opt, adv_loss, self.gen)
                 """
                 self.scheduler.step()
@@ -295,16 +301,19 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
                 # ===Test===
                 if epoch % cfg.pre_log_step == 0 or epoch == epochs - 1:
                     self.log.info(
-                        '[MLE-GEN] epoch %d : Epoch = %d, pre_loss = %.4f, %s' % (epoch, epoch, pre_loss, self.cal_metrics(fmt_str=True)))
+                        '[MLE-GEN] epoch %d : Epoch = %d, pre_loss = %.4f, %s' % (
+                        epoch, epoch, pre_loss, self.cal_metrics(fmt_str=True)))
             else:
                 self.log.info('>>> Stop by pre signal, skip to adversarial training...')
                 break
 
-
     def train_gen_epoch(self, model, data_loader, optimizer):
         total_loss = 0
         for i, data in enumerate(data_loader):
-            inp, target = data['input'], data['target'] #[batch_size, max_seq_len], [batch_size, max_seq_len]
+            # train on 30% of the dataset
+            if i == 11250:
+                break
+            inp, target = data['input'], data['target']  # [batch_size, max_seq_len], [batch_size, max_seq_len]
             inp = target[:, :-1]
             target = target[:, 1:]
             if cfg.CUDA:
@@ -344,7 +353,7 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
             self.nll_gen.reset(self.gen, self.train_data.loader)
             self.nll_div.reset(self.gen, gen_data.loader)
             # self.self_bleu.reset(test_text=gen_tokens_s, real_text=gen_tokens)
-            self.ppl.reset(gen_tokens)
+            # self.ppl.reset(gen_tokens)
 
         if fmt_str:
             return ', '.join(['%s = %s' % (metric.get_name(), metric.get_score()) for metric in self.all_metrics])
@@ -370,7 +379,7 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
         data_loader = self.train_data.loader
         fake_sentences = []
         for count, data in enumerate(data_loader):
-            #if count * cfg.batch_size > 10000:
+            # if count * cfg.batch_size > 10000:
             #    break
             inp = data['input']
             if cfg.CUDA:
@@ -382,10 +391,11 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
             samples = [self.bpe.decode(sample) for sample in samples]
             for sample in samples:
                 sample_tokenized = self.nltk_tokenizer.tokenize(sample.split())
-                #sample_tokenized = sample
-                sample_tokenized = sample_tokenized[:15]
+                # sample_tokenized = sample
+                # sample_tokenized = sample_tokenized[:15]
                 fake_sentences.append(sample_tokenized)
-        text_process.write_tokens(cfg.save_samples_root + 'fake_dataset_epoch' + str(epoch) + '.txt', fake_sentences)
+        # text_process.write_tokens(cfg.save_samples_root + 'fake_dataset_epoch' + str(epoch) + '.txt', fake_sentences)
+        text_process.write_tokens('bert_fake_dataset/fake_dataset_epoch' + str(epoch) + '.txt', fake_sentences)
 
     def create_fake_true_dataset(self, epoch):
         """
@@ -393,8 +403,9 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
         """
         # fake_sentences = text_process.get_tokenlized(fake_data_path)
         # true_sentences = text_process.get_tokenlized(true_data_path)
-        fake_data_path = cfg.save_samples_root + 'fake_dataset_epoch' + str(epoch) + '.txt'
-        true_data_path = 'dataset/image_coco.txt'
+        # fake_data_path = cfg.save_samples_root + 'fake_dataset_epoch' + str(epoch) + '.txt'
+        fake_data_path = 'bert_fake_dataset/fake_dataset_epoch' + str(epoch) + '.txt'
+        true_data_path = 'dataset/emnlp_news.txt'
 
         fake_sentences = []
         with open(fake_data_path) as fake_data:
@@ -406,7 +417,7 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
         true_sentences = []
         with open(true_data_path) as true_data:
             for count, row in enumerate(true_data):
-                #if count > 10000:
+                # if count > 10000:
                 #    break
                 row = row.rstrip('\n')
                 if len(nltk.word_tokenize(row.lower())) < cfg.max_seq_len:
@@ -430,7 +441,7 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
         for sentence in true_sentences:
             data.append([sentence[:115], 1])
 
-        image_coco_fake_true_path = cfg.save_samples_root + 'image_coco_fake_true' + str(epoch) + '.csv'
+        image_coco_fake_true_path = cfg.save_samples_root + 'emnlp_coco_fake_true' + str(epoch) + '.csv'
         with open(image_coco_fake_true_path, 'w', encoding='UTF8', newline='') as f:
             writer = csv.writer(f)
 
@@ -439,6 +450,7 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
 
             # write multiple rows
             writer.writerows(data)
+
     @staticmethod
     def optimize(opt, loss, model=None, retain_graph=False):
         # loss.backward(retain_graph=retain_graph)
@@ -448,6 +460,6 @@ class gpt_bert_gan_fake(SelfAttentionInstructor):
 
     @staticmethod
     def mle_optimize(opt, loss, model=None, retain_graph=False):
-        #loss.backward(retain_graph=retain_graph)
+        # loss.backward(retain_graph=retain_graph)
         opt.step()
         opt.zero_grad()
