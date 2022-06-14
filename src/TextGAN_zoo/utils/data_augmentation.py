@@ -77,9 +77,23 @@ def reduce_dataset(dataset_path, dataset_dest):
 
 
 def complete_with_eot(row):
-    while len(nltk.word_tokenize(row.lower())) < cfg.max_seq_len:
+    while len(nltk.word_tokenize(row.lower())) < 60:
         row = row + "<|endoftext|>"
     return row
+
+def complete_dataset_with_eot(dataset_path, dataset_dest):
+    new_samples = []
+    with open(dataset_path, "r") as dataset:
+        for row in dataset:
+            row = row.rstrip('\n')
+            #if len(nltk.word_tokenize(row.lower())) < cfg.max_seq_len:
+            row = complete_with_eot(row)
+            new_samples.append(row)
+
+    with open(dataset_dest, "w") as dest:
+        for sample in new_samples:
+            dest.write(sample[:115])
+            dest.write('\n')
 
 def create_fake_true_dataset(fake_data_path, true_data_path):
     """
@@ -126,5 +140,7 @@ def create_fake_true_dataset(fake_data_path, true_data_path):
 #simple_sentences_rotation("image_coco.txt", "image_coco_with_random_rotations.txt",
 #                          keep_original=False, uniform_rotation=False, cut_a=True)
 #cut_first_token("image_coco.txt", "image_coco_with_no_a")
-reduce_dataset("emnlp_news.txt", "emnlp_news_small.txt")
+#reduce_dataset("emnlp_news.txt", "emnlp_news_small.txt")
 #create_fake_true_dataset("image_coco_fake_no_train.txt", "image_coco.txt")
+#complete_dataset_with_eot("image_coco.txt", "image_coco_with_eot.txt")
+complete_dataset_with_eot("emnlp_news.txt", "emnlp_news_with_eot.txt")

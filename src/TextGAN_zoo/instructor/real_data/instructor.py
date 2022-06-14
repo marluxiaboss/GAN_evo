@@ -4,7 +4,7 @@
 # @FileName     : instructor.py
 # @Time         : Created at 2019-04-25
 # @Blog         : http://zhiweil.ml/
-# @Description  : 
+# @Description  :
 # Copyrights (C) 2018. All Rights Reserved.
 
 import numpy as np
@@ -17,7 +17,8 @@ from metrics.clas_acc import ACC
 from metrics.nll import NLL
 from metrics.ppl import PPL
 from utils.cat_data_loader import CatClasDataIter
-from utils.gpt2_data_loader import GenDataIter
+#from utils.gpt2_data_loader import GenDataIter
+from utils.data_loader import GenDataIter
 from utils.helpers import Signal, create_logger, get_fixed_temperature
 from utils.text_process import load_dict, write_tokens, tensor_to_tokens
 
@@ -33,6 +34,7 @@ class BasicInstructor:
 
         self.clas = None
 
+        print("I'm here")
 
         # load dictionary
         self.word2idx_dict, self.idx2word_dict = load_dict(cfg.dataset)
@@ -329,7 +331,7 @@ class SelfAttentionInstructor:
         self.nll_div = NLL('NLL_div', if_use=cfg.use_nll_div, gpu=cfg.CUDA)
         self.self_bleu = BLEU('Self-BLEU', gram=[2, 3, 4], if_use=cfg.use_self_bleu)
         self.clas_acc = ACC(if_use=cfg.use_clas_acc)
-        self.ppl = PPL(self.train_data, self.test_data, n_gram=5, if_use=cfg.use_ppl)
+        #self.ppl = PPL(self.train_data, self.test_data, n_gram=5, if_use=cfg.use_ppl)
         # reduced temporarly
         self.all_metrics = [self.bleu]
 
@@ -357,15 +359,14 @@ class SelfAttentionInstructor:
         total_loss = 0
         for i, data in enumerate(data_loader):
             inp, target = data['input'], data['target'] #[batch_size, max_seq_len], [batch_size, max_seq_len]
-            #inp = inp.transpose(1, 0).contiguous()       # [max_seq_len, batch_size]
             if cfg.CUDA:
                 inp, target = inp.cuda(), target.cuda()
-            #print(f"inp: {inp} \n target: {target}")
-            # TODO: what is lm_labels ? is it exactly the target ?: probably
             loss = model.forward(inp, lm_labels=target)  # [max_seq_len * batch_size, vocab_size]
-            #loss = criterion(pred, target.view(-1))
-            # TODO: is there something to change with optimizer ?
-            self.optimize(optimizer, loss, model)
+            loss.backward()
+
+            # gradient accumulation
+            if i % 4 == 0:
+                self.optimize(optimizer, loss, model)
             total_loss += loss.item()
         return total_loss / len(data_loader)
 
@@ -449,11 +450,10 @@ class SelfAttentionInstructor:
 
     @staticmethod
     def optimize(opt, loss, model=None, retain_graph=False):
-        opt.zero_grad()
-        loss.backward(retain_graph=retain_graph)
         if model is not None:
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.clip_norm)
         opt.step()
+        opt.zero_grad()
 
     def show_config(self):
         self.log.info(100 * '=')
@@ -470,63 +470,33 @@ class SelfAttentionInstructor:
         with torch.no_grad():
             # Prepare data for evaluation
             eval_samples = self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
-                                                     batch_size=cfg.samples_num, temperature=0.7, top_k=40,
-                                                    sample_pos2=True)
+                                                     batch_size=10, temperature=0.7, top_k=40, sample_pos2=False)
             gen_data = GenDataIter(eval_samples)
             gen_tokens = tensor_to_tokens(eval_samples, self.idx2word_dict)
-            #gen_tokens_s = tensor_to_tokens(self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
-            #                                        batch_size=200, temperature=0.7, top_k=40), self.idx2word_dict)
-            
+            #gen_tokens_s = tensor_to_tokens(self.gen.sample_sequence(cfg.max_seq_len -1, start_token=cfg.start_letter,            #                        batch_size=200, temperature=0.7, top_k=40), self.idx2word_dict)
 
             # Reset metrics
             self.bleu.reset(test_text=gen_tokens, real_text=self.test_data.tokens)
             self.nll_gen.reset(self.gen, self.train_data.loader)
             self.nll_div.reset(self.gen, gen_data.loader)
             #self.self_bleu.reset(test_text=gen_tokens_s, real_text=gen_tokens)
-            self.ppl.reset(gen_tokens)
+            #self.ppl.reset(gen_tokens)
 
         if fmt_str:
             return ', '.join(['%s = %s' % (metric.get_name(), metric.get_score()) for metric in self.all_metrics])
         else:
             return [metric.get_score() for metric in self.all_metrics]
-    """
-    def cal_metrics_with_label(self, label_i):
-        assert type(label_i) == int, 'missing label'
 
-        with torch.no_grad():
-            # Prepare data for evaluation
-            eval_samples = self.gen.sample_sequence(cfg.samples_num, 8 * cfg.batch_size, label_i=label_i)
-            gen_data = GenDataIter(eval_samples)
-            gen_tokens = tensor_to_tokens(eval_samples, self.idx2word_dict)
-            gen_tokens_s = tensor_to_tokens(self.gen.sample_sequence(200, 200, label_i=label_i), self.idx2word_dict)
-            clas_data = CatClasDataIter([eval_samples], label_i)
-
-            # Reset metrics
-            self.bleu.reset(test_text=gen_tokens, real_text=self.test_data_list[label_i].tokens)
-            self.nll_gen.reset(self.gen, self.train_data_list[label_i].loader, label_i)
-            self.nll_div.reset(self.gen, gen_data.loader, label_i)
-            self.self_bleu.reset(test_text=gen_tokens_s, real_text=gen_tokens)
-            self.clas_acc.reset(self.clas, clas_data.loader)
-            self.ppl.reset(gen_tokens)
-
-        return [metric.get_score() for metric in self.all_metrics]
-
-    def comb_metrics(self, fmt_str=False):
-        all_scores = [self.cal_metrics_with_label(label_i) for label_i in range(cfg.k_label)]
-        all_scores = np.array(all_scores).T.tolist()  # each row for each metric
-
-        if fmt_str:
-            return ', '.join(['%s = %s' % (metric.get_name(), score)
-                              for (metric, score) in zip(self.all_metrics, all_scores)])
-        return all_scores """
 
     def _save(self, phase, epoch):
         """Save model state dict and generator's samples"""
         if phase != 'ADV':
             torch.save(self.gen.state_dict(), cfg.save_model_root + 'gen_{}_{:05d}.pt'.format(phase, epoch))
         save_sample_path = cfg.save_samples_root + 'samples_{}_{:05d}.txt'.format(phase, epoch)
+
+
         samples = self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
-                                            batch_size=cfg.samples_num, temperature=0.7, top_k=40)
+                                            batch_size=50, temperature=0.7, top_k=40)
         write_tokens(save_sample_path, tensor_to_tokens(samples, self.idx2word_dict))
 
     def update_temperature(self, i, N):

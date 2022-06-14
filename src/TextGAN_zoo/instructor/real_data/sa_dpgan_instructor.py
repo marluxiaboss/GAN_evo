@@ -1,27 +1,21 @@
-# -*- coding: utf-8 -*-
-# @Author       : William
-# @Project      : TextGAN-william
-# @FileName     : dpgan_instructor.py
-# @Time         : Created at 2019/12/21
-# @Blog         : http://zhiweil.ml/
-# @Description  :
-# Copyrights (C) 2018. All Rights Reserved.
-
 import torch
 import torch.optim as optim
 
 import config as cfg
+from instructor.real_data.instructor import SelfAttentionInstructor
 from instructor.real_data.instructor import BasicInstructor
 from models.DPGAN_D import DPGAN_D
-from models.DPGAN_G import DPGAN_G
+from models.SA_DPGAN_D import SA_DPGAN_D
 from models.SA_DPGAN_G import SA_DPGAN_G
 
+from models.DGSAN_G import DGSAN_G
 
-class DPGANInstructor(BasicInstructor):
+
+
+class SADPGANInstructor(SelfAttentionInstructor):
     def __init__(self, opt):
-        super(DPGANInstructor, self).__init__(opt)
+        super(SADPGANInstructor, self).__init__(opt)
 
-        # generator, discriminator
         config = cfg.GPT2Config()
         # generator, discriminator
         self.gen = SA_DPGAN_G(config)
@@ -113,7 +107,9 @@ class DPGANInstructor(BasicInstructor):
                 inp = inp.cuda()
 
             gen_sample, gen_sample_log_prob = self.gen.sample_teacher_forcing(inp)
-            word_reward, sentence_reward = self.dis.getReward(gen_sample)
+            word_reward, sentence_reward = self.dis.getReward(gen_sample, pos_or_neg_sample = "NEG")
+            #print(f"word reward: {word_reward}")
+            #print(f"sentence_reward: {sentence_reward}")
             sentence_reward = sentence_reward.repeat(1, cfg.max_seq_len)
             reward_matrix = sentence_reward * word_reward * dis_count_matrix
             for i in range(cfg.max_seq_len):
@@ -136,8 +132,9 @@ class DPGANInstructor(BasicInstructor):
         # prepare loader for validate
         for step in range(d_step):
             # prepare loader for training
-            pos_samples = self.train_data.target
-            neg_samples = self.gen.sample(pos_samples.size(0), 4 * cfg.batch_size)
+            pos_samples = self.train_data.target[:cfg.batch_size,:]
+            neg_samples = self.gen.sample_sequence(cfg.max_seq_len - 1, start_token=cfg.start_letter,
+                                                   batch_size=pos_samples.size(0), temperature=0.7, top_k=40)
 
             pos_reward, neg_reward = 0, 0
             for epoch in range(d_epoch):
@@ -166,7 +163,7 @@ class DPGANInstructor(BasicInstructor):
 
             _, pos_reward = model.getReward(pos_sample)
             _, neg_reward = model.getReward(neg_sample)
-
             loss = -torch.mean(pos_reward) + torch.mean(neg_reward)
+            loss.backward()
             self.optimize(optimizer, loss, model)
         return pos_reward.mean().item(), neg_reward.mean().item()
